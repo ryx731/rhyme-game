@@ -1,835 +1,1159 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Single File React Site</title>
-    <!-- Load React & ReactDOM -->
-    <script src="https://unpkg.com" crossorigin></script>
-    <script src="https://unpkg.com" crossorigin></script>
-    <!-- Load Babel to compile JSX in the browser -->
-    <script src="https://unpkg.com"></script>
-    <style>
-        body { font-family: sans-serif; text-align: center; margin-top: 50px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Rhyme Game</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      height: 100%;
+      background: #4a3fd4;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    #root {
+      height: 100vh;
+      display: flex;
+    }
+    ::-webkit-scrollbar {
+      width: 0;
+    }
+    button {
+      cursor: pointer;
+      font-family: inherit;
+      border: none;
+      outline: none;
+    }
+    input[type="range"] {
+      accent-color: #0EA5E9;
+    }
+  </style>
 </head>
 <body>
+  <div id="root"></div>
 
-    <!-- The root element where React will render -->
-    <div id="root"></div>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    import { useState, useEffect, useRef, useCallback } from "react";
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-const SCHEMES = [
-  { id:"AABB", label:"AABB", desc:"Default",    pattern:["A","A","B","B"] },
-  { id:"ABAB", label:"ABAB", desc:"Alternating",pattern:["A","B","A","B"] },
-  { id:"ABBA", label:"ABBA", desc:"Enclosed",   pattern:["A","B","B","A"] },
-  { id:"AAAA", label:"AAAA", desc:"Mono",       pattern:["A","A","A","A"] },
-  { id:"AAXX", label:"AAXX", desc:"Couplet",    pattern:["A","A",null,null] },
-  { id:"AXAX", label:"AXAX", desc:"Skip",       pattern:["A",null,"A",null] },
-];
-const GROUP_COLORS = { A:"#F97316", B:"#0EA5E9", C:"#EAB308" };
-const HINT_MODES   = ["No Words","First Only","Last Only","All Words"];
-const SYLLABLE_OPTS= ["1 Syllable","2 Syllables","3 Syllables","All 1+2+3"];
-const DURATIONS = [8,16,32,64];
-const DUR_LABELS = ["8 bars","16 bars","32 bars","64 bars"];
-const ROW_H = 96;
-const BALL_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+    // ─── Config ───────────────────────────────────────────────────────────────────
+    const SCHEMES = [
+      { id:"AABB", label:"AABB", desc:"Default",    pattern:["A","A","B","B"] },
+      { id:"ABAB", label:"ABAB", desc:"Alternating",pattern:["A","B","A","B"] },
+      { id:"ABBA", label:"ABBA", desc:"Enclosed",   pattern:["A","B","B","A"] },
+      { id:"AAAA", label:"AAAA", desc:"Mono",       pattern:["A","A","A","A"] },
+      { id:"AAXX", label:"AAXX", desc:"Couplet",    pattern:["A","A",null,null] },
+      { id:"AXAX", label:"AXAX", desc:"Skip",       pattern:["A",null,"A",null] },
+    ];
+    const GROUP_COLORS = { A:"#F97316", B:"#0EA5E9", C:"#EAB308" };
+    const HINT_MODES   = ["No Words","First Only","Last Only","All Words"];
+    const SYLLABLE_OPTS= ["1 Syllable","2 Syllables","3 Syllables","All 1+2+3"];
+    const DURATIONS = [8,16,32,64];
+    const DUR_LABELS = ["8 bars","16 bars","32 bars","64 bars"];
+    const ROW_H = 96;
+    const BEAT_STYLES = ["boom-bap","lofi","trap"];
+    const BEAT_STYLE_LABELS = { "boom-bap":"Boom Bap", "lofi":"Lo-Fi", "trap":"Trap" };
 
-// Default beats + allow custom
-const DEFAULT_BEATS = [
-  { name:"Boom Bap", bpm:88,  style:"boom-bap" },
-  { name:"Lo-Fi",    bpm:75,  style:"lofi"     },
-  { name:"Trap",     bpm:140, style:"trap"      },
-];
+    const DEFAULT_BEATS = [
+      { name:"Boom Bap", bpm:88,  style:"boom-bap" },
+      { name:"Lo-Fi",    bpm:75,  style:"lofi"     },
+      { name:"Trap",     bpm:140, style:"trap"      },
+    ];
 
-// ─── Word pools ───────────────────────────────────────────────────────────────
-const POOLS = {
-  A1:["flow","go","know","so","show","glow","blow","throw","low","crow","foe","yo","pro","oh","dough","hoe"],
-  A2:["shadow","follow","hollow","below","plateau","bestow","elbow","rainbow","window","narrow","borrow","sorrow","arrow","meadow","pillow","willow"],
-  A3:["overflow","undertow","vertigo","domino","studio","scenario","portfolio","buffalo","innuendo","manifesto","crescendo","torpedo"],
-  B1:["night","fight","light","might","right","tight","bright","sight","white","bite","kite","spite","height","quite","cite","write"],
-  B2:["delight","tonight","alright","despite","ignite","excite","moonlight","starlight","midnight","insight","polite","recite","daylight","sunlight","frostbite","reunite"],
-  B3:["satellite","appetite","overnight","expedite","impolite","dynamite","parasite","neophyte","socialite","acolyte","erudite","reunite"],
-  C1:["day","way","say","play","stay","slay","pray","they","pay","lay","ray","bay","clay","gray","spray","hey"],
-  C2:["display","betray","relay","okay","away","convey","delay","decay","portray","hooray","soiree","cliche","bouquet","melee","risque","buffet"],
-  C3:["disobey","ricochet","communique","cabaret","consomme","negligee","disarray","holiday","runaway","getaway","castaway","stowaway","hideaway","faraway","yesterday","anyway"],
-};
-function getPool(grp, syl) {
-  if (!grp) return [];
-  const g = grp === "B" ? "B" : grp === "C" ? "C" : "A";
-  if (syl==="1 Syllable") return POOLS[g+"1"]||POOLS.A1;
-  if (syl==="2 Syllables") return POOLS[g+"2"]||POOLS.A2;
-  if (syl==="3 Syllables") return POOLS[g+"3"]||POOLS.A3;
-  return [...(POOLS[g+"1"]||[]),...(POOLS[g+"2"]||[]),...(POOLS[g+"3"]||[])];
-}
-function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+    // ─── Word pools ───────────────────────────────────────────────────────────────
+    const POOLS = {
+      A1:["flow","go","know","so","show","glow","blow","throw","low","crow","foe","yo","pro","oh","dough","hoe"],
+      A2:["shadow","follow","hollow","below","plateau","bestow","elbow","rainbow","window","narrow","borrow","sorrow","arrow","meadow","pillow","willow"],
+      A3:["overflow","undertow","vertigo","domino","studio","scenario","portfolio","buffalo","innuendo","manifesto","crescendo","torpedo"],
+      B1:["night","fight","light","might","right","tight","bright","sight","white","bite","kite","spite","height","quite","cite","write"],
+      B2:["delight","tonight","alright","despite","ignite","excite","moonlight","starlight","midnight","insight","polite","recite","daylight","sunlight","frostbite","reunite"],
+      B3:["satellite","appetite","overnight","expedite","impolite","dynamite","parasite","neophyte","socialite","acolyte","erudite","reunite"],
+      C1:["day","way","say","play","stay","slay","pray","they","pay","lay","ray","bay","clay","gray","spray","hey"],
+      C2:["display","betray","relay","okay","away","convey","delay","decay","portray","hooray","soiree","cliche","bouquet","melee","risque","buffet"],
+      C3:["disobey","ricochet","communique","cabaret","consomme","negligee","disarray","holiday","runaway","getaway","castaway","stowaway","hideaway","faraway","yesterday","anyway"],
+    };
 
-function buildBars(scheme, syl, numBars) {
-  const used={A:0,B:0,C:0};
-  const pools={A:shuffle(getPool("A",syl)),B:shuffle(getPool("B",syl)),C:shuffle(getPool("C",syl))};
-  return Array.from({length:numBars},(_,i)=>{
-    const grp = scheme.pattern[i%scheme.pattern.length];
-    let word = null;
-    if (grp) { word = pools[grp][used[grp]%pools[grp].length]; used[grp]++; }
-    return { barNum:i+1, word, group:grp };
-  });
-}
-
-// ─── Audio ────────────────────────────────────────────────────────────────────
-function makeEngine(ctx, style) {
-  function kick(t){
-    const o=ctx.createOscillator(),g=ctx.createGain();
-    o.connect(g);g.connect(ctx.destination);
-    o.frequency.setValueAtTime(160,t);o.frequency.exponentialRampToValueAtTime(40,t+0.12);
-    g.gain.setValueAtTime(1.4,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.35);
-    o.start(t);o.stop(t+0.4);
-  }
-  function snare(t){
-    const len=ctx.sampleRate*0.18,buf=ctx.createBuffer(1,len,ctx.sampleRate),d=buf.getChannelData(0);
-    for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
-    const src=ctx.createBufferSource();src.buffer=buf;
-    const f=ctx.createBiquadFilter();f.type="highpass";f.frequency.value=1800;
-    const g=ctx.createGain();src.connect(f);f.connect(g);g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.8,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
-    src.start(t);src.stop(t+0.22);
-  }
-  function hat(t,vol=0.3){
-    const len=ctx.sampleRate*0.05,buf=ctx.createBuffer(1,len,ctx.sampleRate),d=buf.getChannelData(0);
-    for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
-    const src=ctx.createBufferSource();src.buffer=buf;
-    const f=ctx.createBiquadFilter();f.type="highpass";f.frequency.value=9000;
-    const g=ctx.createGain();src.connect(f);f.connect(g);g.connect(ctx.destination);
-    g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.05);
-    src.start(t);src.stop(t+0.07);
-  }
-  return (time,bib,spb)=>{
-    if(style==="boom-bap"){
-      if(bib===0){kick(time);hat(time,0.2);}
-      if(bib===1)hat(time,0.25);
-      if(bib===2){snare(time);kick(time+spb*0.5);hat(time,0.2);}
-      if(bib===3)hat(time,0.3);
-    } else if(style==="lofi"){
-      if(bib===0)kick(time);
-      if(bib===1)hat(time,0.18);
-      if(bib===2)snare(time);
-      if(bib===3)hat(time,0.14);
-      hat(time+spb*0.5,0.08);
-    } else {
-      if(bib===0||bib===2)kick(time);
-      if(bib===1||bib===3)snare(time);
-      for(let i=0;i<4;i++)hat(time+(spb/4)*i,0.1+(i%2===0?0.08:0));
+    function getPool(grp, syl, sets) {
+      if (!grp) return [];
+      const g = grp === "B" ? "B" : grp === "C" ? "C" : "A";
+      const pools = sets || POOLS;
+      const pick = (k) => (pools[k] && pools[k].length ? pools[k] : POOLS[k]) || [];
+      if (syl==="1 Syllable") return pick(g+"1");
+      if (syl==="2 Syllables") return pick(g+"2");
+      if (syl==="3 Syllables") return pick(g+"3");
+      return [...pick(g+"1"),...pick(g+"2"),...pick(g+"3")];
     }
-  };
-}
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ROOT
-// ═══════════════════════════════════════════════════════════════════════════════
-export default function RhymeGame() {
-  const [screen,    setScreen]    = useState("home");
-  const [schemeIdx, setSchemeIdx] = useState(0);
-  const [hintMode,  setHintMode]  = useState("All Words");
-  const [sylIdx,    setSylIdx]    = useState(3);
-  const [beatIdx,   setBeatIdx]   = useState(0);
-  const [durIdx,    setDurIdx]    = useState(1);
-  const [bars,      setBars]      = useState([]);
-  const [ballSpeed, setBallSpeed] = useState(1);
+    function shuffle(arr){ 
+      const a=[...arr]; 
+      for(let i=a.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));
+        [a[i],a[j]]=[a[j],a[i]];
+      } 
+      return a; 
+    }
 
-  // Custom beats & word sets stored in localStorage
-  const [beats, setBeats] = useState(() => {
-    const saved = localStorage.getItem("rhyme_beats");
-    return saved ? JSON.parse(saved) : DEFAULT_BEATS;
-  });
-  const [wordSets, setWordSets] = useState(() => {
-    const saved = localStorage.getItem("rhyme_words");
-    return saved ? JSON.parse(saved) : { A: POOLS, B: POOLS, C: POOLS };
-  });
+    function buildBars(scheme, syl, numBars, sets) {
+      const used={A:0,B:0,C:0};
+      const pools={
+        A:shuffle(getPool("A",syl,sets)),
+        B:shuffle(getPool("B",syl,sets)),
+        C:shuffle(getPool("C",syl,sets))
+      };
+      return Array.from({length:numBars},(_,i)=>{
+        const grp = scheme.pattern[i%scheme.pattern.length];
+        let word = null;
+        if (grp) { word = pools[grp][used[grp]%Math.max(1,pools[grp].length)]; used[grp]++; }
+        return { barNum:i+1, word, group:grp };
+      });
+    }
 
-  const [isPlaying,   setIsPlaying]   = useState(false);
-  const [currentBar,  setCurrentBar]  = useState(0);
-  const [beatInBar,   setBeatInBar]   = useState(0);
-  const [beatFrac,    setBeatFrac]    = useState(0);
-
-  const audioCtx  = useRef(null);
-  const schedFn   = useRef(null);
-  const timerRef  = useRef(null);
-  const animRef   = useRef(null);
-  const startT    = useRef(0);
-  const nextT     = useRef(0);
-  const bCount    = useRef(0);
-  const rowRefs   = useRef({});
-  const scrollRef = useRef(null);
-
-  // Save beats/words to localStorage
-  useEffect(() => {
-    localStorage.setItem("rhyme_beats", JSON.stringify(beats));
-  }, [beats]);
-  useEffect(() => {
-    localStorage.setItem("rhyme_words", JSON.stringify(wordSets));
-  }, [wordSets]);
-
-  const scheme  = SCHEMES[schemeIdx];
-  const beat    = beats[beatIdx] || beats[0];
-  const bpm     = beat.bpm;
-  const spb     = 60 / (bpm * ballSpeed); // ball speed multiplies BPM
-  const numBars = DURATIONS[durIdx];
-  const syl     = SYLLABLE_OPTS[sylIdx];
-
-  useEffect(() => {
-    setBars(buildBars(scheme, syl, numBars));
-  }, [schemeIdx, sylIdx, numBars]);
-
-  // Smooth scroll: keep active row ~30% from top
-  useEffect(() => {
-    if (screen !== "game") return;
-    const el = rowRefs.current[currentBar];
-    const cont = scrollRef.current;
-    if (!el || !cont) return;
-    const target = el.offsetTop - cont.clientHeight * 0.30;
-    cont.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
-  }, [currentBar, screen]);
-
-  const startSession = () => {
-    setCurrentBar(0); setBeatInBar(0); setBeatFrac(0);
-    bCount.current = 0; setIsPlaying(false);
-    setScreen("game");
-  };
-
-  const startPlay = useCallback(() => {
-    const ctx = new (window.AudioContext||window.webkitAudioContext)();
-    audioCtx.current = ctx;
-    schedFn.current = makeEngine(ctx, beat.style);
-    nextT.current = ctx.currentTime + 0.05;
-    startT.current = ctx.currentTime + 0.05;
-    bCount.current = 0;
-    const sched = () => {
-      while (nextT.current < ctx.currentTime + 0.12) {
-        schedFn.current(nextT.current, bCount.current % 4, spb);
-        nextT.current += spb;
-        bCount.current++;
+    // ─── Audio ────────────────────────────────────────────────────────────────────
+    function makeEngine(ctx, style) {
+      function kick(t){
+        const o=ctx.createOscillator(),g=ctx.createGain();
+        o.connect(g);g.connect(ctx.destination);
+        o.frequency.setValueAtTime(160,t);o.frequency.exponentialRampToValueAtTime(40,t+0.12);
+        g.gain.setValueAtTime(1.4,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+        o.start(t);o.stop(t+0.4);
       }
-      timerRef.current = setTimeout(sched, 20);
-    };
-    sched();
-    setIsPlaying(true);
-  }, [beat.style, spb]);
-
-  const stopPlay = useCallback(() => {
-    clearTimeout(timerRef.current);
-    cancelAnimationFrame(animRef.current);
-    audioCtx.current?.close();
-    audioCtx.current = null;
-    setIsPlaying(false);
-  }, []);
-
-  useEffect(() => {
-    if (!isPlaying) return;
-    let lastBar = -1;
-    const tick = () => {
-      const ctx = audioCtx.current;
-      if (!ctx) return;
-      const elapsed = Math.max(0, ctx.currentTime - startT.current);
-      const total   = elapsed / spb;
-      const barIdx  = Math.floor(total / 4);
-      setBeatInBar(Math.floor(total) % 4);
-      setBeatFrac(total % 1);
-      if (barIdx !== lastBar) {
-        lastBar = barIdx;
-        setCurrentBar(Math.min(barIdx, bars.length - 1));
+      function snare(t){
+        const len=ctx.sampleRate*0.18,buf=ctx.createBuffer(1,len,ctx.sampleRate),d=buf.getChannelData(0);
+        for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+        const src=ctx.createBufferSource();src.buffer=buf;
+        const f=ctx.createBiquadFilter();f.type="highpass";f.frequency.value=1800;
+        const g=ctx.createGain();src.connect(f);f.connect(g);g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.8,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+        src.start(t);src.stop(t+0.22);
       }
-      animRef.current = requestAnimationFrame(tick);
-    };
-    animRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animRef.current);
-  }, [isPlaying, spb, bars.length]);
+      function hat(t,vol=0.3){
+        const len=ctx.sampleRate*0.05,buf=ctx.createBuffer(1,len,ctx.sampleRate),d=buf.getChannelData(0);
+        for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+        const src=ctx.createBufferSource();src.buffer=buf;
+        const f=ctx.createBiquadFilter();f.type="highpass";f.frequency.value=9000;
+        const g=ctx.createGain();src.connect(f);f.connect(g);g.connect(ctx.destination);
+        g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+        src.start(t);src.stop(t+0.07);
+      }
+      return (time,bib,spb)=>{
+        if(style==="boom-bap"){
+          if(bib===0){kick(time);hat(time,0.2);}
+          if(bib===1)hat(time,0.25);
+          if(bib===2){snare(time);kick(time+spb*0.5);hat(time,0.2);}
+          if(bib===3)hat(time,0.3);
+        } else if(style==="lofi"){
+          if(bib===0)kick(time);
+          if(bib===1)hat(time,0.18);
+          if(bib===2)snare(time);
+          if(bib===3)hat(time,0.14);
+          hat(time+spb*0.5,0.08);
+        } else {
+          if(bib===0||bib===2)kick(time);
+          if(bib===1||bib===3)snare(time);
+          for(let i=0;i<4;i++)hat(time+(spb/4)*i,0.1+(i%2===0?0.08:0));
+        }
+      };
+    }
 
-  useEffect(() => () => stopPlay(), [stopPlay]);
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // ROOT
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function RhymeGame() {
+      const [screen,    setScreen]    = useState("home");
+      const [schemeIdx, setSchemeIdx] = useState(0);
+      const [hintMode,  setHintMode]  = useState("All Words");
+      const [sylIdx,    setSylIdx]    = useState(3);
+      const [beatIdx,   setBeatIdx]   = useState(0);
+      const [durIdx,    setDurIdx]    = useState(1);
+      const [bars,      setBars]      = useState([]);
+      const [ballSpeed, setBallSpeed] = useState(1);
 
-  const goHome = () => { stopPlay(); setScreen("home"); };
+      const [beats, setBeats] = useState(() => {
+        const saved = localStorage.getItem("rhyme_beats");
+        return saved ? JSON.parse(saved) : DEFAULT_BEATS;
+      });
+      const [wordSets, setWordSets] = useState(() => {
+        const saved = localStorage.getItem("rhyme_words");
+        return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(POOLS));
+      });
 
-  function shouldShow(barIdx) {
-    if (hintMode==="No Words")  return false;
-    if (hintMode==="All Words") return true;
-    const pos = barIdx % scheme.pattern.length;
-    if (hintMode==="Last Only")  return pos === scheme.pattern.length-1;
-    if (hintMode==="First Only") return pos === 0;
-    return true;
-  }
+      const [isPlaying,   setIsPlaying]   = useState(false);
+      const [currentBar,  setCurrentBar]  = useState(0);
+      const [beatInBar,   setBeatInBar]   = useState(0);
+      const [beatFrac,    setBeatFrac]    = useState(0);
 
-  return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap');
-        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-        html,body{height:100%;background:#4a3fd4;overflow:hidden;}
-        ::-webkit-scrollbar{width:0;}
-        button{cursor:pointer;font-family:inherit;border:none;outline:none;}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-      `}</style>
+      const audioCtx  = useRef(null);
+      const schedFn   = useRef(null);
+      const timerRef  = useRef(null);
+      const animRef   = useRef(null);
+      const startT    = useRef(0);
+      const nextT     = useRef(0);
+      const bCount    = useRef(0);
+      const rowRefs   = useRef({});
+      const scrollRef = useRef(null);
 
-      {screen === "home" && (
-        <HomeScreen
-          schemeIdx={schemeIdx} setSchemeIdx={setSchemeIdx}
-          hintMode={hintMode}   setHintMode={setHintMode}
-          sylIdx={sylIdx}       setSylIdx={setSylIdx}
-          beatIdx={beatIdx}     setBeatIdx={setBeatIdx}
-          durIdx={durIdx}       setDurIdx={setDurIdx}
-          ballSpeed={ballSpeed} setBallSpeed={setBallSpeed}
-          bars={bars}           scheme={scheme}
-          beats={beats} setBeats={setBeats}
-          wordSets={wordSets} setWordSets={setWordSets}
-          onStart={startSession}
-        />
-      )}
+      useEffect(() => {
+        localStorage.setItem("rhyme_beats", JSON.stringify(beats));
+      }, [beats]);
+      useEffect(() => {
+        localStorage.setItem("rhyme_words", JSON.stringify(wordSets));
+      }, [wordSets]);
 
-      {screen === "game" && (
-        <GameScreen
-          bars={bars}
-          currentBar={currentBar}
-          beatInBar={beatInBar}
-          beatFrac={beatFrac}
-          isPlaying={isPlaying}
-          onPlay={startPlay}
-          onPause={stopPlay}
-          onBack={goHome}
-          beatName={beat.name}
-          bpm={bpm}
-          ballSpeed={ballSpeed}
-          scrollRef={scrollRef}
-          rowRefs={rowRefs}
-          shouldShow={shouldShow}
-          hintMode={hintMode}
-        />
-      )}
-    </>
-  );
-}
+      useEffect(() => {
+        if (beatIdx > beats.length - 1) setBeatIdx(0);
+      }, [beats, beatIdx]);
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// HOME
-// ═══════════════════════════════════════════════════════════════════════════════
-function HomeScreen({ schemeIdx,setSchemeIdx,hintMode,setHintMode,sylIdx,setSylIdx,
-  beatIdx,setBeatIdx,durIdx,setDurIdx,ballSpeed,setBallSpeed,bars,scheme,
-  beats,setBeats,wordSets,setWordSets,onStart }) {
-  const [showMore, setShowMore] = useState(false);
-  const [settingMode, setSettingMode] = useState(null); // null | "beats" | "words"
-  const syl = SYLLABLE_OPTS[sylIdx];
+      const scheme  = SCHEMES[schemeIdx];
+      const beat    = beats[beatIdx] || beats[0] || DEFAULT_BEATS[0];
+      const bpm     = beat.bpm;
+      const spb     = 60 / (bpm * ballSpeed);
+      const numBars = DURATIONS[durIdx];
+      const syl     = SYLLABLE_OPTS[sylIdx];
 
-  if (settingMode === "beats") {
-    return <BeatBuilder beats={beats} setBeats={setBeats} onBack={() => setSettingMode(null)} />;
-  }
-  if (settingMode === "words") {
-    return <WordBuilder wordSets={wordSets} setWordSets={setWordSets} onBack={() => setSettingMode(null)} />;
-  }
+      useEffect(() => {
+        setBars(buildBars(scheme, syl, numBars, wordSets));
+      }, [schemeIdx, sylIdx, numBars, wordSets]);
 
-  return (
-    <div style={{
-      height:"100vh",overflowY:"auto",
-      background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
-      padding:"24px 16px 120px",
-      display:"flex",flexDirection:"column",alignItems:"center",
-      fontFamily:"'Inter',sans-serif",
-      animation:"fadeIn 0.35s ease both",
-    }}>
-      <div style={{width:"100%",maxWidth:480}}>
+      useEffect(() => {
+        if (screen !== "game") return;
+        const el = rowRefs.current[currentBar];
+        const cont = scrollRef.current;
+        if (!el || !cont) return;
+        const target = el.offsetTop - cont.clientHeight * 0.30;
+        cont.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+      }, [currentBar, screen]);
 
-        {/* ── 1. WORDS ── */}
-        <SectionCard num={1} label="WORDS">
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <CircleBtn onClick={()=>setSylIdx(i=>(i-1+SYLLABLE_OPTS.length)%SYLLABLE_OPTS.length)}>‹</CircleBtn>
-            <div style={{
-              flex:1,textAlign:"center",
-              fontFamily:"'Nunito'",fontWeight:900,fontSize:19,color:"#fff",
-              display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-            }}>
-              <span style={{fontSize:20}}>🔢</span>{syl}
-            </div>
-            <CircleBtn onClick={()=>setSylIdx(i=>(i+1)%SYLLABLE_OPTS.length)}>›</CircleBtn>
-          </div>
-        </SectionCard>
+      const startSession = () => {
+        setCurrentBar(0); setBeatInBar(0); setBeatFrac(0);
+        bCount.current = 0; setIsPlaying(false);
+        setScreen("game");
+      };
 
-        {/* ── 2. SCHEME ── */}
-        <SectionCard num={2} label={`SCHEME: ${scheme.id}`} sub={scheme.desc.toUpperCase()}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-            <CircleBtn onClick={()=>setSchemeIdx(i=>(i-1+SCHEMES.length)%SCHEMES.length)}>‹</CircleBtn>
-            <div style={{flex:1}}>
-              <MiniGrid scheme={scheme} bars={bars.slice(0,4)} />
-            </div>
-            <CircleBtn onClick={()=>setSchemeIdx(i=>(i+1)%SCHEMES.length)}>›</CircleBtn>
-          </div>
-          {/* hint mode pills */}
-          <div style={{display:"flex",gap:6}}>
-            {HINT_MODES.map(m=>(
-              <button key={m} onClick={()=>setHintMode(m)} style={{
-                flex:1,padding:"8px 2px",borderRadius:20,
-                background: hintMode===m ? "#fff" : "rgba(255,255,255,0.1)",
-                color:      hintMode===m ? "#3d31c4" : "rgba(255,255,255,0.65)",
-                fontSize:10,fontWeight:800,
-                border:"none",transition:"all 0.15s",
-                whiteSpace:"nowrap",
-              }}>{m}</button>
-            ))}
-          </div>
-        </SectionCard>
+      const startPlay = useCallback(() => {
+        const ctx = new (window.AudioContext||window.webkitAudioContext)();
+        audioCtx.current = ctx;
+        schedFn.current = makeEngine(ctx, beat.style);
+        nextT.current = ctx.currentTime + 0.05;
+        startT.current = ctx.currentTime + 0.05;
+        bCount.current = 0;
+        const sched = () => {
+          while (nextT.current < ctx.currentTime + 0.12) {
+            schedFn.current(nextT.current, bCount.current % 4, spb);
+            nextT.current += spb;
+            bCount.current++;
+          }
+          timerRef.current = setTimeout(sched, 20);
+        };
+        sched();
+        setIsPlaying(true);
+      }, [beat.style, spb]);
 
-        {/* ── 3. BEAT ── */}
-        <SectionCard num={3} label="BEAT">
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-            <CircleBtn onClick={()=>setBeatIdx(i=>(i-1+BEATS.length)%BEATS.length)}>‹</CircleBtn>
-            <div style={{
-              flex:1,background:"rgba(0,0,0,0.2)",borderRadius:12,
-              padding:"10px 14px",display:"flex",alignItems:"center",gap:12,
-            }}>
-              <div style={{
-                width:44,height:44,borderRadius:8,flexShrink:0,
-                background:"linear-gradient(135deg,#7c3aed,#2563eb)",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,
-              }}>🎵</div>
-              <div>
-                <div style={{fontFamily:"'Nunito'",fontWeight:900,fontSize:17,color:"#fff"}}>
-                  {BEATS[beatIdx].name}
+      const stopPlay = useCallback(() => {
+        clearTimeout(timerRef.current);
+        cancelAnimationFrame(animRef.current);
+        audioCtx.current?.close();
+        audioCtx.current = null;
+        setIsPlaying(false);
+      }, []);
+
+      useEffect(() => {
+        if (!isPlaying) return;
+        let lastBar = -1;
+        const tick = () => {
+          const ctx = audioCtx.current;
+          if (!ctx) return;
+          const elapsed = Math.max(0, ctx.currentTime - startT.current);
+          const total   = elapsed / spb;
+          const barIdx  = Math.floor(total / 4);
+          setBeatInBar(Math.floor(total) % 4);
+          setBeatFrac(total % 1);
+          if (barIdx !== lastBar) {
+            lastBar = barIdx;
+            setCurrentBar(Math.min(barIdx, bars.length - 1));
+          }
+          animRef.current = requestAnimationFrame(tick);
+        };
+        animRef.current = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(animRef.current);
+      }, [isPlaying, spb, bars.length]);
+
+      useEffect(() => () => stopPlay(), [stopPlay]);
+
+      const goHome = () => { stopPlay(); setScreen("home"); };
+
+      function shouldShow(barIdx) {
+        if (hintMode==="No Words")  return false;
+        if (hintMode==="All Words") return true;
+        const pos = barIdx % scheme.pattern.length;
+        if (hintMode==="Last Only")  return pos === scheme.pattern.length-1;
+        if (hintMode==="First Only") return pos === 0;
+        return true;
+      }
+
+      return (
+        <>
+          <style>{`
+            @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+          `}</style>
+
+          {screen === "home" && (
+            <HomeScreen
+              schemeIdx={schemeIdx} setSchemeIdx={setSchemeIdx}
+              hintMode={hintMode}   setHintMode={setHintMode}
+              sylIdx={sylIdx}       setSylIdx={setSylIdx}
+              beatIdx={beatIdx}     setBeatIdx={setBeatIdx}
+              durIdx={durIdx}       setDurIdx={setDurIdx}
+              ballSpeed={ballSpeed} setBallSpeed={setBallSpeed}
+              bars={bars}           scheme={scheme}
+              beats={beats} setBeats={setBeats}
+              wordSets={wordSets} setWordSets={setWordSets}
+              onStart={startSession}
+            />
+          )}
+
+          {screen === "game" && (
+            <GameScreen
+              bars={bars}
+              currentBar={currentBar}
+              beatInBar={beatInBar}
+              beatFrac={beatFrac}
+              isPlaying={isPlaying}
+              onPlay={startPlay}
+              onPause={stopPlay}
+              onBack={goHome}
+              beatName={beat.name}
+              bpm={bpm}
+              ballSpeed={ballSpeed}
+              scrollRef={scrollRef}
+              rowRefs={rowRefs}
+              shouldShow={shouldShow}
+              hintMode={hintMode}
+            />
+          )}
+        </>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // HOME
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function HomeScreen({ schemeIdx,setSchemeIdx,hintMode,setHintMode,sylIdx,setSylIdx,
+      beatIdx,setBeatIdx,durIdx,setDurIdx,ballSpeed,setBallSpeed,bars,scheme,
+      beats,setBeats,wordSets,setWordSets,onStart }) {
+      const [showMore, setShowMore] = useState(false);
+      const [settingMode, setSettingMode] = useState(null);
+      const syl = SYLLABLE_OPTS[sylIdx];
+      const activeBeat = beats[beatIdx] || beats[0];
+
+      if (settingMode === "beats") {
+        return (
+          <BeatBuilder
+            beats={beats}
+            setBeats={setBeats}
+            activeIdx={beatIdx}
+            setActiveIdx={setBeatIdx}
+            onBack={() => setSettingMode(null)}
+          />
+        );
+      }
+      if (settingMode === "words") {
+        return <WordBuilder wordSets={wordSets} setWordSets={setWordSets} onBack={() => setSettingMode(null)} />;
+      }
+
+      return (
+        <div style={{
+          height:"100vh",overflowY:"auto",
+          background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
+          padding:"24px 16px 120px",
+          display:"flex",flexDirection:"column",alignItems:"center",
+          fontFamily:"'Inter',sans-serif",
+          animation:"fadeIn 0.35s ease both",
+        }}>
+          <div style={{width:"100%",maxWidth:480}}>
+
+            {/* ── 1. WORDS ── */}
+            <SectionCard num={1} label="WORDS">
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <CircleBtn onClick={()=>setSylIdx(i=>(i-1+SYLLABLE_OPTS.length)%SYLLABLE_OPTS.length)}>‹</CircleBtn>
+                <div style={{
+                  flex:1,textAlign:"center",
+                  fontFamily:"'Nunito'",fontWeight:900,fontSize:19,color:"#fff",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                }}>
+                  <span style={{fontSize:20}}>🔢</span>{syl}
                 </div>
-                <div style={{fontSize:12,color:"rgba(255,255,255,0.45)"}}>
-                  {BEATS[beatIdx].bpm} BPM
-                </div>
+                <CircleBtn onClick={()=>setSylIdx(i=>(i+1)%SYLLABLE_OPTS.length)}>›</CircleBtn>
               </div>
-            </div>
-            <CircleBtn onClick={()=>setBeatIdx(i=>(i+1)%BEATS.length)}>›</CircleBtn>
-          </div>
+              <button onClick={() => setSettingMode("words")} style={{
+                marginTop:12,width:"100%",background:"rgba(0,0,0,0.15)",color:"#EAB308",
+                borderRadius:12,padding:"10px",fontWeight:700,fontSize:13,
+                border:"1px solid rgba(234,179,8,0.3)",
+              }}>✎ Edit Word Sets</button>
+            </SectionCard>
 
-          <button onClick={()=>setShowMore(p=>!p)} style={{
-            background:"none",color:"rgba(255,255,255,0.4)",
-            fontSize:12,fontWeight:600,marginBottom:10,display:"flex",alignItems:"center",gap:4,
-          }}>
-            {showMore?"Less ▲":"More ▼"}
-          </button>
-
-          {showMore && (
-            <div style={{display:"flex",flexDirection:"column",gap:8,animation:"fadeIn 0.2s ease"}}>
-              {/* Duration */}
-              <div style={{background:"rgba(0,0,0,0.15)",borderRadius:12,padding:"12px 14px"}}>
-                <div style={{fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.35)",marginBottom:8}}>DURATION</div>
-                <div style={{display:"flex",gap:6}}>
-                  {DUR_LABELS.map((l,i)=>(
-                    <button key={l} onClick={()=>setDurIdx(i)} style={{
-                      flex:1,padding:"8px 4px",borderRadius:10,
-                      background: durIdx===i ? "transparent" : "rgba(255,255,255,0.07)",
-                      color:      durIdx===i ? "#F97316" : "rgba(255,255,255,0.6)",
-                      border:     durIdx===i ? "1.5px solid #F97316" : "1.5px solid transparent",
-                      fontSize:11,fontWeight:700,transition:"all 0.15s",
-                    }}>{l}</button>
-                  ))}
+            {/* ── 2. SCHEME ── */}
+            <SectionCard num={2} label={`SCHEME: ${scheme.id}`} sub={scheme.desc.toUpperCase()}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                <CircleBtn onClick={()=>setSchemeIdx(i=>(i-1+SCHEMES.length)%SCHEMES.length)}>‹</CircleBtn>
+                <div style={{flex:1}}>
+                  <MiniGrid scheme={scheme} bars={bars.slice(0,4)} />
                 </div>
+                <CircleBtn onClick={()=>setSchemeIdx(i=>(i+1)%SCHEMES.length)}>›</CircleBtn>
               </div>
-              {/* Ball pace slider */}
-              <div style={{background:"rgba(0,0,0,0.15)",borderRadius:12,padding:"12px 14px"}}>
+              <div style={{display:"flex",gap:6}}>
+                {HINT_MODES.map(m=>(
+                  <button key={m} onClick={()=>setHintMode(m)} style={{
+                    flex:1,padding:"8px 2px",borderRadius:20,
+                    background: hintMode===m ? "#fff" : "rgba(255,255,255,0.1)",
+                    color:      hintMode===m ? "#3d31c4" : "rgba(255,255,255,0.65)",
+                    fontSize:10,fontWeight:800,
+                    border:"none",transition:"all 0.15s",
+                    whiteSpace:"nowrap",
+                  }}>{m}</button>
+                ))}
+              </div>
+            </SectionCard>
+
+            {/* ── 3. BEAT ── */}
+            <SectionCard num={3} label="BEAT">
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                <CircleBtn onClick={()=>setBeatIdx(i=>(i-1+beats.length)%beats.length)}>‹</CircleBtn>
+                <div style={{
+                  flex:1,background:"rgba(0,0,0,0.2)",borderRadius:12,
+                  padding:"10px 14px",display:"flex",alignItems:"center",gap:12,
+                }}>
+                  <div style={{
+                    width:44,height:44,borderRadius:8,flexShrink:0,
+                    background:"linear-gradient(135deg,#7c3aed,#2563eb)",
+                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,
+                  }}>🎵</div>
+                  <div>
+                    <div style={{fontFamily:"'Nunito'",fontWeight:900,fontSize:17,color:"#fff"}}>
+                      {activeBeat.name}
+                    </div>
+                    <div style={{fontSize:12,color:"rgba(255,255,255,0.45)"}}>
+                      {activeBeat.bpm} BPM
+                    </div>
+                  </div>
+                </div>
+                <CircleBtn onClick={()=>setBeatIdx(i=>(i+1)%beats.length)}>›</CircleBtn>
+              </div>
+
+              {/* Ball Pace */}
+              <div style={{background:"rgba(0,0,0,0.15)",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                   <span style={{fontSize:14,fontWeight:600,color:"#fff"}}>Ball Pace</span>
                   <span style={{fontSize:13,fontWeight:700,color:"#0EA5E9"}}>{ballSpeed.toFixed(2)}x Speed</span>
                 </div>
-                <input type="range" min="0.5" max="2" step="0.25" value={ballSpeed}
+                <input type="range" min="0.5" max="2" step="0.05" value={ballSpeed}
                   onChange={e => setBallSpeed(parseFloat(e.target.value))}
-                  style={{
-                    width:"100%",cursor:"pointer",
-                    accentColor:"#0EA5E9",
-                  }}
+                  style={{ width:"100%",cursor:"pointer" }}
                 />
                 <div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontSize:10,color:"rgba(255,255,255,0.35)"}}>
-                  <span>Slow</span><span>Fast</span>
+                  <span>0.5x Slow</span><span>2x Fast</span>
                 </div>
               </div>
-              {/* Settings buttons */}
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={() => setSettingMode("beats")} style={{
-                  flex:1,background:"rgba(0,0,0,0.15)",color:"#0EA5E9",
-                  borderRadius:12,padding:"10px",fontWeight:700,fontSize:13,
-                  border:"1px solid rgba(14,165,233,0.3)",
-                }}>+ Beats</button>
-                <button onClick={() => setSettingMode("words")} style={{
-                  flex:1,background:"rgba(0,0,0,0.15)",color:"#EAB308",
-                  borderRadius:12,padding:"10px",fontWeight:700,fontSize:13,
-                  border:"1px solid rgba(234,179,8,0.3)",
-                }}>+ Words</button>
-              </div>
-            </div>
-          )}
-        </SectionCard>
 
-        {/* Start */}
-        <button onClick={onStart} style={{
-          width:"100%",padding:"18px",
-          background:"#F97316",color:"#fff",
-          borderRadius:16,fontFamily:"'Nunito'",fontWeight:900,fontSize:22,
-          boxShadow:"0 6px 28px rgba(249,115,22,0.5)",border:"none",
-          transition:"transform 0.1s",
-        }}
-        onMouseDown={e=>e.currentTarget.style.transform="scale(0.97)"}
-        onMouseUp={e=>e.currentTarget.style.transform="scale(1)"}
-        >Start Freestyle ▶</button>
-      </div>
-    </div>
-  );
-}
+              <button onClick={()=>setShowMore(p=>!p)} style={{
+                background:"none",color:"rgba(255,255,255,0.4)",
+                fontSize:12,fontWeight:600,marginBottom:10,display:"flex",alignItems:"center",gap:4,
+              }}>
+                {showMore?"Less ▲":"More ▼"}
+              </button>
 
-function SectionCard({ num, label, sub, children }) {
-  return (
-    <div style={{
-      background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.12)",
-      borderRadius:18,padding:"16px",marginBottom:12,
-    }}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+              {showMore && (
+                <div style={{display:"flex",flexDirection:"column",gap:8,animation:"fadeIn 0.2s ease"}}>
+                  {/* Duration */}
+                  <div style={{background:"rgba(0,0,0,0.15)",borderRadius:12,padding:"12px 14px"}}>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.35)",marginBottom:8}}>DURATION</div>
+                    <div style={{display:"flex",gap:6}}>
+                      {DUR_LABELS.map((l,i)=>(
+                        <button key={l} onClick={()=>setDurIdx(i)} style={{
+                          flex:1,padding:"8px 4px",borderRadius:10,
+                          background: durIdx===i ? "transparent" : "rgba(255,255,255,0.07)",
+                          color:      durIdx===i ? "#F97316" : "rgba(255,255,255,0.6)",
+                          border:     durIdx===i ? "1.5px solid #F97316" : "1.5px solid transparent",
+                          fontSize:11,fontWeight:700,transition:"all 0.15s",
+                        }}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Settings buttons */}
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={() => setSettingMode("beats")} style={{
+                      flex:1,background:"rgba(0,0,0,0.15)",color:"#0EA5E9",
+                      borderRadius:12,padding:"10px",fontWeight:700,fontSize:13,
+                      border:"1px solid rgba(14,165,233,0.3)",
+                    }}>+ Beats</button>
+                    <button onClick={() => setSettingMode("words")} style={{
+                      flex:1,background:"rgba(0,0,0,0.15)",color:"#EAB308",
+                      borderRadius:12,padding:"10px",fontWeight:700,fontSize:13,
+                      border:"1px solid rgba(234,179,8,0.3)",
+                    }}>+ Words</button>
+                  </div>
+                </div>
+              )}
+            </SectionCard>
+
+            {/* Start */}
+            <button onClick={onStart} style={{
+              width:"100%",padding:"18px",
+              background:"#F97316",color:"#fff",
+              borderRadius:16,fontFamily:"'Nunito'",fontWeight:900,fontSize:22,
+              boxShadow:"0 6px 28px rgba(249,115,22,0.5)",border:"none",
+              transition:"transform 0.1s",
+            }}
+            onMouseDown={e=>e.currentTarget.style.transform="scale(0.97)"}
+            onMouseUp={e=>e.currentTarget.style.transform="scale(1)"}
+            >Start Freestyle ▶</button>
+          </div>
+        </div>
+      );
+    }
+
+    function SectionCard({ num, label, sub, children }) {
+      return (
         <div style={{
-          width:22,height:22,borderRadius:6,
-          background:"rgba(255,255,255,0.15)",
-          display:"flex",alignItems:"center",justifyContent:"center",
-          fontSize:11,fontWeight:800,color:"#fff",flexShrink:0,
-        }}>{num}</div>
-        <span style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.5)"}}>{label}</span>
-        {sub && <span style={{fontSize:10,color:"rgba(255,255,255,0.3)",fontWeight:600}}>({sub})</span>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function CircleBtn({ onClick, children }) {
-  return (
-    <button onClick={onClick} style={{
-      width:36,height:36,borderRadius:"50%",flexShrink:0,
-      background:"rgba(255,255,255,0.12)",color:"#fff",
-      fontSize:18,fontWeight:700,
-      border:"1px solid rgba(255,255,255,0.18)",
-      display:"flex",alignItems:"center",justifyContent:"center",
-    }}>{children}</button>
-  );
-}
-
-function MiniGrid({ scheme, bars }) {
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:5}}>
-      {scheme.pattern.map((grp,i)=>{
-        const bar = bars[i];
-        const col = grp ? GROUP_COLORS[grp] : null;
-        return (
-          <div key={i} style={{display:"flex",gap:5}}>
-            {[0,1,2].map(c=>(
-              <div key={c} style={{flex:1,height:32,borderRadius:7,background:"rgba(255,255,255,0.1)"}}/>
-            ))}
+          background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.12)",
+          borderRadius:18,padding:"16px",marginBottom:12,
+        }}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
             <div style={{
-              flex:1,height:32,borderRadius:7,
-              background:col||"rgba(255,255,255,0.08)",
+              width:22,height:22,borderRadius:6,
+              background:"rgba(255,255,255,0.15)",
               display:"flex",alignItems:"center",justifyContent:"center",
-              fontFamily:"'Nunito'",fontWeight:900,fontSize:12,
-              color:col?"#111":"rgba(255,255,255,0.2)",
+              fontSize:11,fontWeight:800,color:"#fff",flexShrink:0,
+            }}>{num}</div>
+            <span style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.5)"}}>{label}</span>
+            {sub && <span style={{fontSize:10,color:"rgba(255,255,255,0.3)",fontWeight:600}}>({sub})</span>}
+          </div>
+          {children}
+        </div>
+      );
+    }
+
+    function CircleBtn({ onClick, children }) {
+      return (
+        <button onClick={onClick} style={{
+          width:36,height:36,borderRadius:"50%",flexShrink:0,
+          background:"rgba(255,255,255,0.12)",color:"#fff",
+          fontSize:18,fontWeight:700,
+          border:"1px solid rgba(255,255,255,0.18)",
+          display:"flex",alignItems:"center",justifyContent:"center",
+        }}>{children}</button>
+      );
+    }
+
+    function BuilderHeader({ title, onBack }) {
+      return (
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+          <button onClick={onBack} style={{
+            width:36,height:36,borderRadius:"50%",flexShrink:0,
+            background:"rgba(255,255,255,0.12)",color:"#fff",fontSize:18,
+            border:"1px solid rgba(255,255,255,0.18)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+          }}>‹</button>
+          <span style={{fontFamily:"'Nunito'",fontWeight:900,fontSize:20,color:"#fff"}}>{title}</span>
+        </div>
+      );
+    }
+
+    function MiniGrid({ scheme, bars }) {
+      return (
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>
+          {scheme.pattern.map((grp,i)=>{
+            const bar = bars[i];
+            const col = grp ? GROUP_COLORS[grp] : null;
+            return (
+              <div key={i} style={{display:"flex",gap:5}}>
+                {[0,1,2].map(c=>(
+                  <div key={c} style={{flex:1,height:32,borderRadius:7,background:"rgba(255,255,255,0.1)"}}/>
+                ))}
+                <div style={{
+                  flex:1,height:32,borderRadius:7,
+                  background:col||"rgba(255,255,255,0.08)",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontFamily:"'Nunito'",fontWeight:900,fontSize:12,
+                  color:col?"#111":"rgba(255,255,255,0.2)",
+                }}>
+                  {bar?.word||(grp||"")}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // BEAT BUILDER
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function BeatBuilder({ beats, setBeats, activeIdx, setActiveIdx, onBack }) {
+      const [name, setName]   = useState("");
+      const [bpm,  setBpm]    = useState(95);
+      const [style,setStyle]  = useState("boom-bap");
+      const [previewIdx, setPreviewIdx] = useState(null);
+
+      const previewCtx  = useRef(null);
+      const previewTimer= useRef(null);
+
+      const stopPreview = useCallback(() => {
+        clearTimeout(previewTimer.current);
+        previewCtx.current?.close();
+        previewCtx.current = null;
+        setPreviewIdx(null);
+      }, []);
+
+      useEffect(() => () => stopPreview(), [stopPreview]);
+
+      function togglePreview(idx, b) {
+        if (previewIdx === idx) { stopPreview(); return; }
+        stopPreview();
+        const ctx = new (window.AudioContext||window.webkitAudioContext)();
+        previewCtx.current = ctx;
+        const sched = makeEngine(ctx, b.style);
+        const spb = 60 / b.bpm;
+        let next = ctx.currentTime + 0.05;
+        let count = 0;
+        const loop = () => {
+          while (next < ctx.currentTime + 0.12) {
+            sched(next, count % 4, spb);
+            next += spb;
+            count++;
+          }
+          previewTimer.current = setTimeout(loop, 20);
+        };
+        loop();
+        setPreviewIdx(idx);
+      }
+
+      function addBeat() {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const clampedBpm = Math.max(40, Math.min(220, Math.round(bpm) || 90));
+        setBeats(prev => [...prev, { name: trimmed, bpm: clampedBpm, style }]);
+        setName(""); setBpm(95); setStyle("boom-bap");
+      }
+
+      function deleteBeat(idx) {
+        if (beats.length <= 1) return;
+        stopPreview();
+        setBeats(prev => prev.filter((_,i)=>i!==idx));
+        if (activeIdx >= idx && activeIdx > 0) setActiveIdx(activeIdx - 1);
+      }
+
+      return (
+        <div style={{
+          height:"100vh",overflowY:"auto",
+          background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
+          padding:"24px 16px 60px",
+          fontFamily:"'Inter',sans-serif",
+          animation:"fadeIn 0.35s ease both",
+        }}>
+          <div style={{width:"100%",maxWidth:480,margin:"0 auto"}}>
+            <BuilderHeader title="Custom Beats" onBack={() => { stopPreview(); onBack(); }} />
+
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+              {beats.map((b,idx)=>(
+                <div key={idx} style={{
+                  display:"flex",alignItems:"center",gap:10,
+                  background: idx===activeIdx ? "rgba(249,115,22,0.16)" : "rgba(255,255,255,0.09)",
+                  border: idx===activeIdx ? "1px solid rgba(249,115,22,0.5)" : "1px solid rgba(255,255,255,0.12)",
+                  borderRadius:14,padding:"10px 12px",
+                }}>
+                  <button onClick={()=>togglePreview(idx,b)} style={{
+                    width:38,height:38,borderRadius:"50%",flexShrink:0,
+                    background: previewIdx===idx ? "#F97316" : "rgba(255,255,255,0.14)",
+                    color:"#fff",fontSize:15,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                  }}>{previewIdx===idx ? "⏸" : "▶"}</button>
+
+                  <button onClick={()=>setActiveIdx(idx)} style={{
+                    flex:1,textAlign:"left",background:"none",
+                  }}>
+                    <div style={{fontFamily:"'Nunito'",fontWeight:800,fontSize:15,color:"#fff"}}>{b.name}</div>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>
+                      {b.bpm} BPM · {BEAT_STYLE_LABELS[b.style]||b.style}
+                    </div>
+                  </button>
+
+                  {idx===activeIdx && (
+                    <span style={{fontSize:10,fontWeight:800,color:"#F97316",marginRight:4}}>SELECTED</span>
+                  )}
+
+                  <button onClick={()=>deleteBeat(idx)} disabled={beats.length<=1} style={{
+                    width:30,height:30,borderRadius:"50%",flexShrink:0,
+                    background:"rgba(255,255,255,0.08)",
+                    color: beats.length<=1 ? "rgba(255,255,255,0.2)" : "#fca5a5",
+                    fontSize:14,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    opacity: beats.length<=1 ? 0.5 : 1,
+                  }}>✕</button>
+                </div>
+              ))}
+            </div>
+
+            <div style={{
+              background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.12)",
+              borderRadius:18,padding:16,
             }}>
-              {bar?.word||(grp||"")}
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.5)",marginBottom:14}}>ADD A NEW BEAT</div>
+
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:6}}>Name</div>
+                <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Drill, West Coast..."
+                  style={{
+                    width:"100%",padding:"10px 12px",borderRadius:10,
+                    background:"rgba(0,0,0,0.2)",border:"1px solid rgba(255,255,255,0.15)",
+                    color:"#fff",fontSize:14,fontFamily:"inherit",
+                  }}/>
+              </div>
+
+              <div style={{marginBottom:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>Tempo</span>
+                  <span style={{fontSize:12,fontWeight:700,color:"#0EA5E9"}}>{bpm} BPM</span>
+                </div>
+                <input type="range" min="40" max="220" step="1" value={bpm}
+                  onChange={e=>setBpm(parseInt(e.target.value,10))}
+                  style={{width:"100%",cursor:"pointer"}}/>
+              </div>
+
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:6}}>Drum Style</div>
+                <div style={{display:"flex",gap:6}}>
+                  {BEAT_STYLES.map(s=>(
+                    <button key={s} onClick={()=>setStyle(s)} style={{
+                      flex:1,padding:"9px 4px",borderRadius:10,
+                      background: style===s ? "#fff" : "rgba(255,255,255,0.08)",
+                      color:      style===s ? "#3d31c4" : "rgba(255,255,255,0.6)",
+                      fontSize:12,fontWeight:800,
+                    }}>{BEAT_STYLE_LABELS[s]}</button>
+                  ))}
+                </div>
+              </div>
+
+              <button onClick={addBeat} disabled={!name.trim()} style={{
+                width:"100%",padding:"13px",borderRadius:12,
+                background: name.trim() ? "#F97316" : "rgba(255,255,255,0.1)",
+                color: name.trim() ? "#fff" : "rgba(255,255,255,0.35)",
+                fontFamily:"'Nunito'",fontWeight:900,fontSize:15,
+              }}>+ Add Beat</button>
             </div>
           </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// GAME
-// ═══════════════════════════════════════════════════════════════════════════════
-function GameScreen({ bars,currentBar,beatInBar,beatFrac,isPlaying,
-  onPlay,onPause,onBack,beatName,bpm,scrollRef,rowRefs,shouldShow,hintMode }) {
-  return (
-    <div style={{
-      height:"100vh",
-      background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
-      display:"flex",flexDirection:"column",overflow:"hidden",
-      fontFamily:"'Inter',sans-serif",
-    }}>
-      <div ref={scrollRef} style={{flex:1,overflowY:"scroll",overflowX:"hidden",paddingTop:16}}>
-        {bars.map((bar,idx)=>{
-          const isCur  = idx===currentBar;
-          const isPast = idx<currentBar;
-          const dist   = currentBar-idx;
-          const opacity= isPast ? Math.max(0.15, 1-dist*0.13) : 1;
-          return (
-            <BarRow
-              key={idx}
-              refCb={el=>{ if(el) rowRefs.current[idx]=el; }}
-              bar={bar}
-              isCurrent={isCur}
-              isPast={isPast}
-              opacity={opacity}
-              showWord={shouldShow(idx)}
-              isPlaying={isPlaying}
-              beatInBar={beatInBar}
-              beatFrac={beatFrac}
-            />
-          );
-        })}
-        <div style={{height:300}}/>
-      </div>
-
-      <BottomPanel
-        isPlaying={isPlaying} onPlay={onPlay} onPause={onPause} onBack={onBack}
-        beatName={beatName} bpm={bpm} hintMode={hintMode}
-        currentBar={currentBar} totalBars={bars.length}
-      />
-    </div>
-  );
-}
-
-// ─── Bar row ─────────────────────────────────────────────────────────────────
-function BarRow({ refCb, bar, isCurrent, isPast, opacity, showWord, isPlaying, beatInBar, beatFrac }) {
-  const color = bar.group ? GROUP_COLORS[bar.group] : null;
-  // Ball position (only used when isCurrent && isPlaying)
-  const ballXFrac   = (beatInBar + beatFrac) / 4; // 0..1
-  const bounceY     = Math.sin(beatFrac * Math.PI); // 0 at beat endpoints, 1 at peak
-  const BALL_R      = 17;
-  // Ball y: at bottom of row when bounceY=0, arcs up
-  const rowPixH     = isCurrent ? ROW_H + 10 : ROW_H;
-  const ballBottom  = 10 + bounceY * (rowPixH * 0.55);
-  const ballLeftPct = 3 + ballXFrac * 94; // stay within 3%..97%
-
-  return (
-    <div
-      ref={refCb}
-      style={{
-        display:"flex",alignItems:"center",
-        padding:"0 8px",marginBottom:5,
-        opacity,
-        transition:"opacity 0.45s ease",
-      }}
-    >
-      {/* Left number */}
-      <div style={{
-        width:30,flexShrink:0,textAlign:"right",paddingRight:6,
-        fontSize:11,color:"rgba(255,255,255,0.28)",fontWeight:600,
-      }}>{bar.barNum}</div>
-
-      {/* Row body */}
-      <div style={{
-        flex:1,
-        height:rowPixH,
-        position:"relative",
-        display:"flex",gap:5,alignItems:"stretch",
-        borderRadius:12,
-        // Active row: strong white outline + glow
-        outline: isCurrent
-          ? "3px solid rgba(255,255,255,0.9)"
-          : "3px solid transparent",
-        outlineOffset:2,
-        boxShadow: isCurrent
-          ? "0 0 0 6px rgba(255,255,255,0.13), 0 10px 36px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.1)"
-          : "none",
-        transition:"all 0.35s cubic-bezier(.4,0,.2,1)",
-        overflow:"visible",
-      }}>
-        {/* 3 freestyle cells */}
-        {[0,1,2].map(c=>(
-          <div key={c} style={{
-            flex:1,
-            background: isCurrent
-              ? "rgba(255,255,255,0.22)"
-              : isPast
-                ? "rgba(255,255,255,0.05)"
-                : "rgba(255,255,255,0.10)",
-            borderRadius:10,
-            transition:"background 0.3s",
-          }}/>
-        ))}
-
-        {/* Word cell */}
-        <div style={{
-          flex:1,
-          background: color
-            ? (isCurrent ? color : isPast ? color+"77" : color+"aa")
-            : (isCurrent ? "rgba(255,255,255,0.2)" : isPast ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.1)"),
-          borderRadius:10,
-          display:"flex",alignItems:"center",justifyContent:"center",
-          fontFamily:"'Nunito'",fontWeight:900,
-          fontSize: !bar.word ? 14 : bar.word.length>7 ? 15 : bar.word.length>5 ? 19 : 23,
-          color: color ? (isCurrent?"#111":"#222") : "rgba(255,255,255,0.2)",
-          transition:"all 0.3s",
-          userSelect:"none",
-        }}>
-          {showWord ? (bar.word||"") : ""}
         </div>
+      );
+    }
 
-        {/* Beat track line + ball — INSIDE the row, at its bottom */}
-        {isCurrent && (
-          <>
-            {/* Track line across the bottom */}
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // WORD BUILDER
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function WordBuilder({ wordSets, setWordSets, onBack }) {
+      const [group, setGroup] = useState("A");
+      const [sylKey, setSylKey] = useState("1");
+      const [bulk, setBulk] = useState("");
+
+      const poolKey = group + sylKey;
+      const words = wordSets[poolKey] && wordSets[poolKey].length ? wordSets[poolKey] : (POOLS[poolKey]||[]);
+
+      function removeWord(w) {
+        setWordSets(prev => ({ ...prev, [poolKey]: (prev[poolKey]||POOLS[poolKey]||[]).filter(x=>x!==w) }));
+      }
+
+      function addWords() {
+        const incoming = bulk
+          .split(/[\n,]/)
+          .map(w=>w.trim().toLowerCase())
+          .filter(Boolean);
+        if (!incoming.length) return;
+        setWordSets(prev => {
+          const current = prev[poolKey] && prev[poolKey].length ? prev[poolKey] : (POOLS[poolKey]||[]);
+          const merged = [...new Set([...current, ...incoming])];
+          return { ...prev, [poolKey]: merged };
+        });
+        setBulk("");
+      }
+
+      function resetPool() {
+        setWordSets(prev => ({ ...prev, [poolKey]: [...(POOLS[poolKey]||[])] }));
+      }
+
+      return (
+        <div style={{
+          height:"100vh",overflowY:"auto",
+          background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
+          padding:"24px 16px 60px",
+          fontFamily:"'Inter',sans-serif",
+          animation:"fadeIn 0.35s ease both",
+        }}>
+          <div style={{width:"100%",maxWidth:480,margin:"0 auto"}}>
+            <BuilderHeader title="Word Sets" onBack={onBack} />
+
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              {["A","B","C"].map(g=>(
+                <button key={g} onClick={()=>setGroup(g)} style={{
+                  flex:1,padding:"10px 4px",borderRadius:12,
+                  background: group===g ? GROUP_COLORS[g] : "rgba(255,255,255,0.09)",
+                  color:      group===g ? "#111" : "rgba(255,255,255,0.6)",
+                  fontFamily:"'Nunito'",fontWeight:900,fontSize:14,
+                  border: group===g ? "none" : "1px solid rgba(255,255,255,0.12)",
+                }}>Group {g}</button>
+              ))}
+            </div>
+
+            <div style={{display:"flex",gap:6,marginBottom:16}}>
+              {[["1","1 Syllable"],["2","2 Syllables"],["3","3 Syllables"]].map(([k,label])=>(
+                <button key={k} onClick={()=>setSylKey(k)} style={{
+                  flex:1,padding:"8px 2px",borderRadius:20,
+                  background: sylKey===k ? "#fff" : "rgba(255,255,255,0.1)",
+                  color:      sylKey===k ? "#3d31c4" : "rgba(255,255,255,0.65)",
+                  fontSize:11,fontWeight:800,
+                }}>{label}</button>
+              ))}
+            </div>
+
             <div style={{
-              position:"absolute",
-              bottom:8,left:"3%",right:"3%",
-              height:2,
-              background:"rgba(255,255,255,0.25)",
-              borderRadius:1,
-              pointerEvents:"none",
-            }}/>
-            {/* 4 beat marker ticks */}
-            {[0,1,2,3].map(i=>{
-              const xPct = 3+(i/3)*94;
-              const isActive = i===beatInBar;
+              background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.12)",
+              borderRadius:18,padding:16,marginBottom:16,
+            }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <span style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.5)"}}>
+                  {words.length} WORDS
+                </span>
+                <button onClick={resetPool} style={{
+                  background:"none",color:"rgba(255,255,255,0.4)",fontSize:11,fontWeight:700,
+                  textDecoration:"underline",
+                }}>Reset to default</button>
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:220,overflowY:"auto"}}>
+                {words.map(w=>(
+                  <span key={w} style={{
+                    display:"flex",alignItems:"center",gap:6,
+                    background: GROUP_COLORS[group]+"33",
+                    border:`1px solid ${GROUP_COLORS[group]}66`,
+                    color:"#fff",borderRadius:20,padding:"5px 6px 5px 12px",
+                    fontSize:13,fontWeight:600,
+                  }}>
+                    {w}
+                    <button onClick={()=>removeWord(w)} style={{
+                      width:18,height:18,borderRadius:"50%",
+                      background:"rgba(0,0,0,0.25)",color:"#fff",fontSize:10,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                    }}>✕</button>
+                  </span>
+                ))}
+                {!words.length && (
+                  <span style={{fontSize:12,color:"rgba(255,255,255,0.35)"}}>No words yet — add some below.</span>
+                )}
+              </div>
+            </div>
+
+            <div style={{
+              background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.12)",
+              borderRadius:18,padding:16,
+            }}>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.5)",marginBottom:10}}>
+                ADD WORDS TO GROUP {group} · {SYLLABLE_OPTS[parseInt(sylKey,10)-1]}
+              </div>
+              <textarea
+                value={bulk}
+                onChange={e=>setBulk(e.target.value)}
+                placeholder="Paste or type words — separate with commas or new lines"
+                rows={4}
+                style={{
+                  width:"100%",padding:"10px 12px",borderRadius:10,
+                  background:"rgba(0,0,0,0.2)",border:"1px solid rgba(255,255,255,0.15)",
+                  color:"#fff",fontSize:14,fontFamily:"inherit",resize:"vertical",marginBottom:10,
+                }}
+              />
+              <button onClick={addWords} disabled={!bulk.trim()} style={{
+                width:"100%",padding:"13px",borderRadius:12,
+                background: bulk.trim() ? GROUP_COLORS[group] : "rgba(255,255,255,0.1)",
+                color: bulk.trim() ? "#111" : "rgba(255,255,255,0.35)",
+                fontFamily:"'Nunito'",fontWeight:900,fontSize:15,
+              }}>+ Add Words</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // GAME
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function GameScreen({ bars,currentBar,beatInBar,beatFrac,isPlaying,
+      onPlay,onPause,onBack,beatName,bpm,scrollRef,rowRefs,shouldShow,hintMode }) {
+      return (
+        <div style={{
+          height:"100vh",
+          background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
+          display:"flex",flexDirection:"column",overflow:"hidden",
+          fontFamily:"'Inter',sans-serif",
+        }}>
+          <div ref={scrollRef} style={{flex:1,overflowY:"scroll",overflowX:"hidden",paddingTop:16}}>
+            {bars.map((bar,idx)=>{
+              const isCur  = idx===currentBar;
+              const isPast = idx<currentBar;
+              const dist   = currentBar-idx;
+              const opacity= isPast ? Math.max(0.15, 1-dist*0.13) : 1;
               return (
-                <div key={i} style={{
-                  position:"absolute",
-                  bottom:4,
-                  left:`${xPct}%`,
-                  transform:"translateX(-50%)",
-                  width:3,height:16,
-                  background: isActive&&isPlaying ? "#fff" : "rgba(255,255,255,0.3)",
-                  borderRadius:2,
-                  boxShadow: isActive&&isPlaying ? "0 0 8px #fff" : "none",
-                  transition:"background 0.05s",
-                  pointerEvents:"none",
-                }}/>
+                <BarRow
+                  key={idx}
+                  refCb={el=>{ if(el) rowRefs.current[idx]=el; }}
+                  bar={bar}
+                  isCurrent={isCur}
+                  isPast={isPast}
+                  opacity={opacity}
+                  showWord={shouldShow(idx)}
+                  isPlaying={isPlaying}
+                  beatInBar={beatInBar}
+                  beatFrac={beatFrac}
+                />
               );
             })}
-            {/* Ball — only when playing */}
-            {isPlaying && (
+            <div style={{height:300}}/>
+          </div>
+
+          <BottomPanel
+            isPlaying={isPlaying} onPlay={onPlay} onPause={onPause} onBack={onBack}
+            beatName={beatName} bpm={bpm} hintMode={hintMode}
+            currentBar={currentBar} totalBars={bars.length}
+          />
+        </div>
+      );
+    }
+
+    function BarRow({ refCb, bar, isCurrent, isPast, opacity, showWord, isPlaying, beatInBar, beatFrac }) {
+      const color = bar.group ? GROUP_COLORS[bar.group] : null;
+      const ballXFrac   = (beatInBar + beatFrac) / 4;
+      const bounceY     = Math.sin(beatFrac * Math.PI);
+      const BALL_R      = 17;
+      const rowPixH     = isCurrent ? ROW_H + 10 : ROW_H;
+      const ballBottom  = 10 + bounceY * (rowPixH * 0.55);
+      const ballLeftPct = 3 + ballXFrac * 94;
+
+      return (
+        <div
+          ref={refCb}
+          style={{
+            display:"flex",alignItems:"center",
+            padding:"0 8px",marginBottom:5,
+            opacity,
+            transition:"opacity 0.45s ease",
+          }}
+        >
+          <div style={{
+            width:30,flexShrink:0,textAlign:"right",paddingRight:6,
+            fontSize:11,color:"rgba(255,255,255,0.28)",fontWeight:600,
+          }}>{bar.barNum}</div>
+
+          <div style={{
+            flex:1,
+            height:rowPixH,
+            position:"relative",
+            display:"flex",gap:5,alignItems:"stretch",
+            borderRadius:12,
+            outline: isCurrent
+              ? "3px solid rgba(255,255,255,0.9)"
+              : "3px solid transparent",
+            outlineOffset:2,
+            boxShadow: isCurrent
+              ? "0 0 0 6px rgba(255,255,255,0.13), 0 10px 36px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.1)"
+              : "none",
+            transition:"all 0.35s cubic-bezier(.4,0,.2,1)",
+            overflow:"visible",
+          }}>
+            {[0,1,2].map(c=>(
+              <div key={c} style={{
+                flex:1,
+                background: isCurrent
+                  ? "rgba(255,255,255,0.22)"
+                  : isPast
+                    ? "rgba(255,255,255,0.05)"
+                    : "rgba(255,255,255,0.10)",
+                borderRadius:10,
+                transition:"background 0.3s",
+              }}/>
+            ))}
+
+            <div style={{
+              flex:1,
+              background: color
+                ? (isCurrent ? color : isPast ? color+"77" : color+"aa")
+                : (isCurrent ? "rgba(255,255,255,0.2)" : isPast ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.1)"),
+              borderRadius:10,
+              display:"flex",alignItems:"center",justifyContent:"center",
+              fontFamily:"'Nunito'",fontWeight:900,
+              fontSize: !bar.word ? 14 : bar.word.length>7 ? 15 : bar.word.length>5 ? 19 : 23,
+              color: color ? (isCurrent?"#111":"#222") : "rgba(255,255,255,0.2)",
+              transition:"all 0.3s",
+              userSelect:"none",
+            }}>
+              {showWord ? (bar.word||"") : ""}
+            </div>
+
+            {isCurrent && (
               <>
-                {/* Shadow */}
                 <div style={{
                   position:"absolute",
-                  bottom:7,
-                  left:`${ballLeftPct}%`,
-                  transform:"translateX(-50%)",
-                  width:BALL_R*1.5,height:6,
-                  borderRadius:"50%",
-                  background:"rgba(0,0,0,0.35)",
-                  filter:"blur(3px)",
+                  bottom:8,left:"3%",right:"3%",
+                  height:2,
+                  background:"rgba(255,255,255,0.25)",
+                  borderRadius:1,
                   pointerEvents:"none",
                 }}/>
-                {/* Ball */}
-                <div style={{
-                  position:"absolute",
-                  bottom:ballBottom,
-                  left:`${ballLeftPct}%`,
-                  transform:"translateX(-50%)",
-                  width:BALL_R*2,height:BALL_R*2,
-                  borderRadius:"50%",
-                  background:"radial-gradient(circle at 33% 28%, #FFE97A, #F5AC26 52%, #C87E0A)",
-                  boxShadow:"0 4px 18px rgba(0,0,0,0.5), 0 0 0 2px rgba(255,255,255,0.2), 0 0 20px rgba(245,172,38,0.7)",
-                  pointerEvents:"none",
-                  zIndex:20,
-                }}/>
+                {[0,1,2,3].map(i=>{
+                  const xPct = 3+(i/3)*94;
+                  const isActive = i===beatInBar;
+                  return (
+                    <div key={i} style={{
+                      position:"absolute",
+                      bottom:4,
+                      left:`${xPct}%`,
+                      transform:"translateX(-50%)",
+                      width:3,height:16,
+                      background: isActive&&isPlaying ? "#fff" : "rgba(255,255,255,0.3)",
+                      borderRadius:2,
+                      boxShadow: isActive&&isPlaying ? "0 0 8px #fff" : "none",
+                      transition:"background 0.05s",
+                      pointerEvents:"none",
+                    }}/>
+                  );
+                })}
+                {isPlaying && (
+                  <>
+                    <div style={{
+                      position:"absolute",
+                      bottom:7,
+                      left:`${ballLeftPct}%`,
+                      transform:"translateX(-50%)",
+                      width:BALL_R*1.5,height:6,
+                      borderRadius:"50%",
+                      background:"rgba(0,0,0,0.35)",
+                      filter:"blur(3px)",
+                      pointerEvents:"none",
+                    }}/>
+                    <div style={{
+                      position:"absolute",
+                      bottom:ballBottom,
+                      left:`${ballLeftPct}%`,
+                      transform:"translateX(-50%)",
+                      width:BALL_R*2,height:BALL_R*2,
+                      borderRadius:"50%",
+                      background:"radial-gradient(circle at 33% 28%, #FFE97A, #F5AC26 52%, #C87E0A)",
+                      boxShadow:"0 4px 18px rgba(0,0,0,0.5), 0 0 0 2px rgba(255,255,255,0.2), 0 0 20px rgba(245,172,38,0.7)",
+                      pointerEvents:"none",
+                      zIndex:20,
+                    }}/>
+                  </>
+                )}
               </>
             )}
-          </>
-        )}
-      </div>
+          </div>
 
-      {/* Right number */}
-      <div style={{
-        width:30,flexShrink:0,paddingLeft:6,
-        fontSize:11,color:"rgba(255,255,255,0.28)",fontWeight:600,
-      }}>{bar.barNum}</div>
-    </div>
-  );
-}
-
-// ─── Bottom panel ─────────────────────────────────────────────────────────────
-function BottomPanel({ isPlaying,onPlay,onPause,onBack,beatName,bpm,hintMode,currentBar,totalBars }) {
-  return (
-    <div style={{
-      background:"rgba(12,8,50,0.95)",
-      backdropFilter:"blur(16px)",
-      borderTop:"1px solid rgba(255,255,255,0.08)",
-      padding:"14px 16px 22px",flexShrink:0,
-    }}>
-      <div style={{
-        textAlign:"center",fontSize:10,fontWeight:700,
-        letterSpacing:2,color:"rgba(255,255,255,0.38)",
-        marginBottom:3,textTransform:"uppercase",
-      }}>
-        {isPlaying ? `Bar ${currentBar+1} of ${totalBars}` : "GAME PAUSED"}
-      </div>
-      {!isPlaying && (
-        <div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.28)",marginBottom:10}}>
-          Swipe Up &amp; Down On Screen to Scroll
+          <div style={{
+            width:30,flexShrink:0,paddingLeft:6,
+            fontSize:11,color:"rgba(255,255,255,0.28)",fontWeight:600,
+          }}>{bar.barNum}</div>
         </div>
-      )}
+      );
+    }
 
-      <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:12}}>
-        <button onClick={onBack} style={{
-          background:"rgba(255,255,255,0.09)",color:"#fff",
-          borderRadius:22,padding:"9px 18px",fontWeight:700,fontSize:13,
-          border:"1px solid rgba(255,255,255,0.14)",
-        }}>‹ BACK 1 Beat</button>
-
-        <button onClick={isPlaying?onPause:onPlay} style={{
-          background: isPlaying?"rgba(255,255,255,0.12)":"#F97316",
-          color:"#fff",borderRadius:22,padding:"9px 26px",
-          fontFamily:"'Nunito'",fontWeight:900,fontSize:15,
-          border: isPlaying?"1px solid rgba(255,255,255,0.18)":"none",
-          boxShadow: isPlaying?"none":"0 3px 18px rgba(249,115,22,0.55)",
-          transition:"all 0.15s",
-        }}>
-          {isPlaying?"⏸ Pause":"▶ Play Beat"}
-        </button>
-
-        <button style={{
-          background:"rgba(255,255,255,0.09)",color:"#fff",
-          borderRadius:22,padding:"9px 18px",fontWeight:700,fontSize:13,
-          border:"1px solid rgba(255,255,255,0.14)",
-        }}>FWD 1 Beat ›</button>
-      </div>
-
-      <div style={{
-        display:"flex",alignItems:"center",gap:12,
-        background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 14px",
-      }}>
+    function BottomPanel({ isPlaying,onPlay,onPause,onBack,beatName,bpm,hintMode,currentBar,totalBars }) {
+      return (
         <div style={{
-          width:44,height:44,borderRadius:8,flexShrink:0,
-          background:"linear-gradient(135deg,#7c3aed,#2563eb)",
-          display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,
-        }}>🎵</div>
-        <div style={{flex:1}}>
-          <div style={{fontFamily:"'Nunito'",fontWeight:800,fontSize:14,color:"#fff"}}>{beatName} Beat</div>
-          <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>
-            {bpm} BPM · {hintMode}
+          background:"rgba(12,8,50,0.95)",
+          backdropFilter:"blur(16px)",
+          borderTop:"1px solid rgba(255,255,255,0.08)",
+          padding:"14px 16px 22px",flexShrink:0,
+        }}>
+          <div style={{
+            textAlign:"center",fontSize:10,fontWeight:700,
+            letterSpacing:2,color:"rgba(255,255,255,0.38)",
+            marginBottom:3,textTransform:"uppercase",
+          }}>
+            {isPlaying ? `Bar ${currentBar+1} of ${totalBars}` : "GAME PAUSED"}
           </div>
-        </div>
-        {/* Progress */}
-        <div style={{width:64,display:"flex",flexDirection:"column",gap:4}}>
-          <div style={{height:3,background:"rgba(255,255,255,0.1)",borderRadius:2,overflow:"hidden"}}>
+          {!isPlaying && (
+            <div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.28)",marginBottom:10}}>
+              Swipe Up &amp; Down On Screen to Scroll
+            </div>
+          )}
+
+          <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:12}}>
+            <button onClick={onBack} style={{
+              background:"rgba(255,255,255,0.09)",color:"#fff",
+              borderRadius:22,padding:"9px 18px",fontWeight:700,fontSize:13,
+              border:"1px solid rgba(255,255,255,0.14)",
+            }}>‹ BACK</button>
+
+            <button onClick={isPlaying?onPause:onPlay} style={{
+              background: isPlaying?"rgba(255,255,255,0.12)":"#F97316",
+              color:"#fff",borderRadius:22,padding:"9px 26px",
+              fontFamily:"'Nunito'",fontWeight:900,fontSize:15,
+              border: isPlaying?"1px solid rgba(255,255,255,0.18)":"none",
+              boxShadow: isPlaying?"none":"0 3px 18px rgba(249,115,22,0.55)",
+              transition:"all 0.15s",
+            }}>
+              {isPlaying?"⏸ Pause":"▶ Play Beat"}
+            </button>
+
+            <button style={{
+              background:"rgba(255,255,255,0.09)",color:"#fff",
+              borderRadius:22,padding:"9px 18px",fontWeight:700,fontSize:13,
+              border:"1px solid rgba(255,255,255,0.14)",
+            }}>FWD ›</button>
+          </div>
+
+          <div style={{
+            display:"flex",alignItems:"center",gap:12,
+            background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 14px",
+          }}>
             <div style={{
-              height:"100%",
-              width:`${Math.round((currentBar/Math.max(1,totalBars-1))*100)}%`,
-              background:"#EAB308",borderRadius:2,transition:"width 0.5s",
-            }}/>
+              width:44,height:44,borderRadius:8,flexShrink:0,
+              background:"linear-gradient(135deg,#7c3aed,#2563eb)",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,
+            }}>🎵</div>
+            <div style={{flex:1}}>
+              <div style={{fontFamily:"'Nunito'",fontWeight:800,fontSize:14,color:"#fff"}}>{beatName} Beat</div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>
+                {bpm} BPM · {hintMode}
+              </div>
+            </div>
+            <div style={{width:64,display:"flex",flexDirection:"column",gap:4}}>
+              <div style={{height:3,background:"rgba(255,255,255,0.1)",borderRadius:2,overflow:"hidden"}}>
+                <div style={{
+                  height:"100%",
+                  width:`${Math.round((currentBar/Math.max(1,totalBars-1))*100)}%`,
+                  background:"#EAB308",borderRadius:2,transition:"width 0.5s",
+                }}/>
+              </div>
+            </div>
           </div>
+
+          <div style={{
+            textAlign:"center",marginTop:10,
+            fontFamily:"'Nunito'",fontWeight:900,fontSize:12,
+            color:"rgba(255,255,255,0.18)",
+          }}>TheRhymeGame.com</div>
         </div>
-      </div>
+      );
+    }
 
-      <div style={{
-        textAlign:"center",marginTop:10,
-        fontFamily:"'Nunito'",fontWeight:900,fontSize:12,
-        color:"rgba(255,255,255,0.18)",
-      }}>TheRhymeGame.com</div>
-    </div>
-  );
-}
-    <script type="text/babel">
-        function App() {
-            const [count, setCount] = React.useState(0);
-
-            return (
-                <div>
-                    <h1>Hello from GitHub Pages!</h1>
-                    <p>This whole website lives in one single file.</p>
-                    <button onClick={() => setCount(count + 1)}>
-                        Clicks: {count}
-                    </button>
-                </div>
-            );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // RENDER
+    // ═══════════════════════════════════════════════════════════════════════════════
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<RhymeGame />);
+  </script>
 </body>
 </html>
