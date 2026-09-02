@@ -226,7 +226,17 @@
 
       const [beats, setBeats] = useState(() => {
         const saved = localStorage.getItem("rhyme_beats");
-        return saved ? JSON.parse(saved) : DEFAULT_BEATS;
+        if (!saved) return DEFAULT_BEATS;
+        try {
+          const parsed = JSON.parse(saved);
+          // Uploaded beats' audio can't be persisted (see the save effect below),
+          // so any "upload" entry surviving in storage is a stale leftover with
+          // no real audio behind it — drop it instead of letting it fail to decode.
+          const cleaned = Array.isArray(parsed) ? parsed.filter(b => b.style !== "upload") : [];
+          return cleaned.length ? cleaned : DEFAULT_BEATS;
+        } catch (e) {
+          return DEFAULT_BEATS;
+        }
       });
       const [wordSets, setWordSets] = useState(() => {
         const saved = localStorage.getItem("rhyme_words");
@@ -249,7 +259,22 @@
       const scrollRef = useRef(null);
 
       useEffect(() => {
-        localStorage.setItem("rhyme_beats", JSON.stringify(beats));
+        // An ArrayBuffer can't survive JSON.stringify (it silently turns into "{}"),
+        // so persisting an uploaded beat's raw audio here would just corrupt it and
+        // fail to decode on the next load. Save everything except that binary data —
+        // uploaded beats simply need to be re-added after a full page reload.
+        try {
+          const toSave = beats.map(b => {
+            if (b.style === "upload") {
+              const { audioData, ...rest } = b;
+              return rest;
+            }
+            return b;
+          });
+          localStorage.setItem("rhyme_beats", JSON.stringify(toSave));
+        } catch (e) {
+          console.error("Could not save beats to localStorage:", e);
+        }
       }, [beats]);
       useEffect(() => {
         localStorage.setItem("rhyme_words", JSON.stringify(wordSets));
@@ -291,23 +316,54 @@
           alert("Web Audio API not supported on this browser.");
           return;
         }
-        
+
+        // If we already have a live context (user hit Pause, not Back), just
+        // resume it instead of tearing it down and building a new one. Mobile
+        // browsers cap how many AudioContexts can exist at once, and closing +
+        // recreating one on every Play/Pause press is exactly the kind of thing
+        // that quietly exhausts that cap and leaves you with silent audio.
+        // Bonus: ctx.currentTime freezes while suspended, so resuming also
+        // continues the beat/bar timing from exactly where it left off.
+        if (audioCtx.current) {
+          const ctx = audioCtx.current;
+          ctx.resume().then(() => {
+            if (beat.style !== "upload") {
+              const sched = () => {
+                while (nextT.current < ctx.currentTime + 0.12) {
+                  schedFn.current(nextT.current, bCount.current % 4, spb);
+                  nextT.current += spb;
+                  bCount.current++;
+                }
+                timerRef.current = setTimeout(sched, 20);
+              };
+              sched();
+            }
+            setIsPlaying(true);
+          });
+          return;
+        }
+
         const ctx = new AudioContext();
         const resumeAndPlay = () => {
           audioCtx.current = ctx;
           
           if (beat.style === "upload" && beat.audioData) {
-            // Play uploaded beat file
-            ctx.decodeAudioData(beat.audioData, (buffer) => {
+            // Play uploaded beat file. Always decode a copy (slice(0)) — decodeAudioData
+            // detaches the buffer it's given, so decoding the original stored buffer
+            // would break every playback after the first (preview included).
+            ctx.decodeAudioData(beat.audioData.slice(0), (buffer) => {
               const src = ctx.createBufferSource();
               src.buffer = buffer;
               src.connect(ctx.destination);
               src.loop = true;
               src.start(0);
+              startT.current = ctx.currentTime;
               setIsPlaying(true);
             }, (err) => {
               console.error("Decode error:", err);
               alert("Could not play this beat");
+              audioCtx.current = null;
+              ctx.close();
             });
           } else {
             // Play synthesized beat
@@ -328,22 +384,47 @@
           }
         };
         
-        if (ctx.state === 'suspended') {
-          ctx.resume().then(resumeAndPlay);
-        } else {
+        // Some mobile browsers report the context as already "running" even
+        // though audio is still locked until a real sound plays, so resume()
+        // unconditionally (it's a harmless no-op if already running) and play
+        // a single silent sample first — the standard mobile "unlock" trick —
+        // before doing anything else.
+        const unlock = () => {
+          const silentBuf = ctx.createBuffer(1, 1, 22050);
+          const silentSrc = ctx.createBufferSource();
+          silentSrc.buffer = silentBuf;
+          silentSrc.connect(ctx.destination);
+          silentSrc.start(0);
+        };
+        ctx.resume().then(() => {
+          unlock();
           resumeAndPlay();
-        }
+        }).catch((err) => {
+          console.error("AudioContext resume failed:", err);
+          unlock();
+          resumeAndPlay();
+        });
       }, [beat.style, beat.audioData, spb]);
 
-      const stopPlay = useCallback(() => {
+      const pausePlay = useCallback(() => {
+        clearTimeout(timerRef.current);
+        cancelAnimationFrame(animRef.current);
+        // Suspend, don't close — keeps the same AudioContext alive so Play can
+        // resume it instantly instead of creating a brand new one.
+        if (audioCtx.current) {
+          audioCtx.current.suspend();
+        }
+        setIsPlaying(false);
+      }, []);
+
+      const closeAudio = useCallback(() => {
         clearTimeout(timerRef.current);
         cancelAnimationFrame(animRef.current);
         if (audioCtx.current) {
-          // Stop all sources before closing
           const ctx = audioCtx.current;
+          audioCtx.current = null;
           ctx.close();
         }
-        audioCtx.current = null;
         setIsPlaying(false);
       }, []);
 
@@ -368,9 +449,9 @@
         return () => cancelAnimationFrame(animRef.current);
       }, [isPlaying, spb, bars.length]);
 
-      useEffect(() => () => stopPlay(), [stopPlay]);
+      useEffect(() => () => closeAudio(), [closeAudio]);
 
-      const goHome = () => { stopPlay(); setScreen("home"); };
+      const goHome = () => { closeAudio(); setScreen("home"); };
 
       return (
         <>
@@ -400,7 +481,7 @@
               beatFrac={beatFrac}
               isPlaying={isPlaying}
               onPlay={startPlay}
-              onPause={stopPlay}
+              onPause={pausePlay}
               onBack={goHome}
               beatName={beat.name}
               bpm={bpm}
@@ -761,7 +842,11 @@
           ctx.resume();
         }
         uploadAudioRef.current = ctx;
-        ctx.decodeAudioData(beat.audioData, (buffer) => {
+        // decodeAudioData detaches/neuters the ArrayBuffer it's given, so decoding
+        // the stored buffer directly would leave it unusable next time (this is
+        // exactly what caused "Cannot decode detached ArrayBuffer" after preview).
+        // Always hand it a fresh copy via slice(0).
+        ctx.decodeAudioData(beat.audioData.slice(0), (buffer) => {
           const src = ctx.createBufferSource();
           src.buffer = buffer;
           src.connect(ctx.destination);
