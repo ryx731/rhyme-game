@@ -28,6 +28,16 @@
       display: flex;
       max-height: 100vh;
     }
+    /* Force the single top-level screen div to fill #root — without this,
+       a flex child with no explicit width/height shrinks to its content
+       size and gets pinned to the top-left, which is the bug that made
+       the game look tiny/misplaced on both desktop and mobile. */
+    #root > * {
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+    }
     /* Desktop fullscreen priority */
     @media (min-width: 1024px) {
       html, body {
@@ -94,7 +104,6 @@
       { id:"AXAX", label:"AXAX", desc:"Skip",       pattern:["A",null,"A",null] },
     ];
     const GROUP_COLORS = { A:"#F97316", B:"#0EA5E9", C:"#EAB308" };
-    const HINT_MODES   = ["No Words","First Only","Last Only","All Words"];
     const SYLLABLE_OPTS= ["1 Syllable","2 Syllables","3 Syllables","All 1+2+3"];
     const DURATIONS = [8,16,32,64];
     const DUR_LABELS = ["8 bars","16 bars","32 bars","64 bars"];
@@ -209,7 +218,6 @@
     function RhymeGame() {
       const [screen,    setScreen]    = useState("home");
       const [schemeIdx, setSchemeIdx] = useState(0);
-      const [hintMode,  setHintMode]  = useState("All Words");
       const [sylIdx,    setSylIdx]    = useState(3);
       const [beatIdx,   setBeatIdx]   = useState(0);
       const [durIdx,    setDurIdx]    = useState(1);
@@ -364,34 +372,6 @@
 
       const goHome = () => { stopPlay(); setScreen("home"); };
 
-      function shouldShow(barIdx) {
-        if (hintMode==="No Words")  return false;
-        if (hintMode==="All Words") return true;
-        const schemeLength = scheme.pattern.filter(p=>p!==null).length;
-        const pos = barIdx % scheme.pattern.length;
-        // Count how many non-null positions we've seen up to this point in the pattern
-        let nonNullsUpToHere = 0;
-        for (let i = 0; i < pos; i++) {
-          if (scheme.pattern[i] !== null) nonNullsUpToHere++;
-        }
-        const isNonNull = scheme.pattern[pos] !== null;
-        if (!isNonNull) return false;
-        
-        if (hintMode==="First Only") {
-          // Show on the first non-null word of each pattern cycle
-          return nonNullsUpToHere === 0;
-        }
-        if (hintMode==="Last Only") {
-          // Show on the last non-null word of each pattern cycle
-          let nonNullsAfterHere = 0;
-          for (let i = pos + 1; i < scheme.pattern.length; i++) {
-            if (scheme.pattern[i] !== null) nonNullsAfterHere++;
-          }
-          return nonNullsAfterHere === 0;
-        }
-        return true;
-      }
-
       return (
         <>
           <style>{`
@@ -401,7 +381,6 @@
           {screen === "home" && (
             <HomeScreen
               schemeIdx={schemeIdx} setSchemeIdx={setSchemeIdx}
-              hintMode={hintMode}   setHintMode={setHintMode}
               sylIdx={sylIdx}       setSylIdx={setSylIdx}
               beatIdx={beatIdx}     setBeatIdx={setBeatIdx}
               durIdx={durIdx}       setDurIdx={setDurIdx}
@@ -428,8 +407,6 @@
               ballSpeed={ballSpeed}
               scrollRef={scrollRef}
               rowRefs={rowRefs}
-              shouldShow={shouldShow}
-              hintMode={hintMode}
             />
           )}
         </>
@@ -439,7 +416,7 @@
     // ═══════════════════════════════════════════════════════════════════════════════
     // HOME
     // ═══════════════════════════════════════════════════════════════════════════════
-    function HomeScreen({ schemeIdx,setSchemeIdx,hintMode,setHintMode,sylIdx,setSylIdx,
+    function HomeScreen({ schemeIdx,setSchemeIdx,sylIdx,setSylIdx,
       beatIdx,setBeatIdx,durIdx,setDurIdx,ballSpeed,setBallSpeed,bars,scheme,
       beats,setBeats,wordSets,setWordSets,onStart }) {
       const [showMore, setShowMore] = useState(false);
@@ -464,14 +441,14 @@
 
       return (
         <div style={{
-          height:"100vh",overflowY:"auto",
+          height:"100%",width:"100%",overflowY:"auto",
           background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
           padding:"24px 16px 120px",
           display:"flex",flexDirection:"column",alignItems:"center",
           fontFamily:"'Inter',sans-serif",
           animation:"fadeIn 0.35s ease both",
         }}>
-          <div style={{width:"100%",maxWidth:480}}>
+          <div style={{width:"100%",maxWidth:"min(94vw, 640px)"}}>
 
             {/* ── 1. WORDS ── */}
             <SectionCard num={1} label="WORDS">
@@ -495,24 +472,12 @@
 
             {/* ── 2. SCHEME ── */}
             <SectionCard num={2} label={`SCHEME: ${scheme.id}`} sub={scheme.desc.toUpperCase()}>
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <CircleBtn onClick={()=>setSchemeIdx(i=>(i-1+SCHEMES.length)%SCHEMES.length)}>‹</CircleBtn>
                 <div style={{flex:1}}>
                   <MiniGrid scheme={scheme} bars={bars.slice(0,4)} />
                 </div>
                 <CircleBtn onClick={()=>setSchemeIdx(i=>(i+1)%SCHEMES.length)}>›</CircleBtn>
-              </div>
-              <div style={{display:"flex",gap:6}}>
-                {HINT_MODES.map(m=>(
-                  <button key={m} onClick={()=>{setHintMode(m); setBars(buildBars(scheme, syl, numBars, wordSets));}} style={{
-                    flex:1,padding:"8px 2px",borderRadius:20,
-                    background: hintMode===m ? "#fff" : "rgba(255,255,255,0.1)",
-                    color:      hintMode===m ? "#3d31c4" : "rgba(255,255,255,0.65)",
-                    fontSize:10,fontWeight:800,
-                    border:"none",transition:"all 0.15s",
-                    whiteSpace:"nowrap",
-                  }}>{m}</button>
-                ))}
               </div>
             </SectionCard>
 
@@ -813,13 +778,13 @@
 
       return (
         <div style={{
-          height:"100vh",overflowY:"auto",
+          height:"100%",width:"100%",overflowY:"auto",
           background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
           padding:"24px 16px 60px",
           fontFamily:"'Inter',sans-serif",
           animation:"fadeIn 0.35s ease both",
         }}>
-          <div style={{width:"100%",maxWidth:480,margin:"0 auto"}}>
+          <div style={{width:"100%",maxWidth:"min(94vw, 640px)",margin:"0 auto"}}>
             <BuilderHeader title="Custom Beats" onBack={() => { stopPreview(); onBack(); }} />
 
             <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
@@ -997,13 +962,13 @@
 
       return (
         <div style={{
-          height:"100vh",overflowY:"auto",
+          height:"100%",width:"100%",overflowY:"auto",
           background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
           padding:"24px 16px 60px",
           fontFamily:"'Inter',sans-serif",
           animation:"fadeIn 0.35s ease both",
         }}>
-          <div style={{width:"100%",maxWidth:480,margin:"0 auto"}}>
+          <div style={{width:"100%",maxWidth:"min(94vw, 640px)",margin:"0 auto"}}>
             <BuilderHeader title="Word Sets" onBack={onBack} />
 
             <div style={{display:"flex",gap:8,marginBottom:10}}>
@@ -1099,48 +1064,49 @@
     // GAME
     // ═══════════════════════════════════════════════════════════════════════════════
     function GameScreen({ bars,currentBar,beatInBar,beatFrac,isPlaying,
-      onPlay,onPause,onBack,beatName,bpm,scrollRef,rowRefs,shouldShow,hintMode }) {
+      onPlay,onPause,onBack,beatName,bpm,scrollRef,rowRefs }) {
       return (
         <div style={{
-          height:"100vh",
+          height:"100%",width:"100%",
           background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
           display:"flex",flexDirection:"column",overflow:"hidden",
           fontFamily:"'Inter',sans-serif",
         }}>
           <div ref={scrollRef} style={{flex:1,overflowY:"scroll",overflowX:"hidden",paddingTop:16}}>
-            {bars.map((bar,idx)=>{
-              const isCur  = idx===currentBar;
-              const isPast = idx<currentBar;
-              const dist   = currentBar-idx;
-              const opacity= isPast ? Math.max(0.15, 1-dist*0.13) : 1;
-              return (
-                <BarRow
-                  key={idx}
-                  refCb={el=>{ if(el) rowRefs.current[idx]=el; }}
-                  bar={bar}
-                  isCurrent={isCur}
-                  isPast={isPast}
-                  opacity={opacity}
-                  showWord={shouldShow(idx)}
-                  isPlaying={isPlaying}
-                  beatInBar={beatInBar}
-                  beatFrac={beatFrac}
-                />
-              );
-            })}
-            <div style={{height:300}}/>
+            <div style={{width:"100%",maxWidth:"min(94vw, 900px)",margin:"0 auto"}}>
+              {bars.map((bar,idx)=>{
+                const isCur  = idx===currentBar;
+                const isPast = idx<currentBar;
+                const dist   = currentBar-idx;
+                const opacity= isPast ? Math.max(0.15, 1-dist*0.13) : 1;
+                return (
+                  <BarRow
+                    key={idx}
+                    refCb={el=>{ if(el) rowRefs.current[idx]=el; }}
+                    bar={bar}
+                    isCurrent={isCur}
+                    isPast={isPast}
+                    opacity={opacity}
+                    isPlaying={isPlaying}
+                    beatInBar={beatInBar}
+                    beatFrac={beatFrac}
+                  />
+                );
+              })}
+              <div style={{height:300}}/>
+            </div>
           </div>
 
           <BottomPanel
             isPlaying={isPlaying} onPlay={onPlay} onPause={onPause} onBack={onBack}
-            beatName={beatName} bpm={bpm} hintMode={hintMode}
+            beatName={beatName} bpm={bpm}
             currentBar={currentBar} totalBars={bars.length}
           />
         </div>
       );
     }
 
-    function BarRow({ refCb, bar, isCurrent, isPast, opacity, showWord, isPlaying, beatInBar, beatFrac }) {
+    function BarRow({ refCb, bar, isCurrent, isPast, opacity, isPlaying, beatInBar, beatFrac }) {
       const color = bar.group ? GROUP_COLORS[bar.group] : null;
       const ballXFrac   = (beatInBar + beatFrac) / 4;
       const bounceY     = Math.sin(beatFrac * Math.PI);
@@ -1206,7 +1172,7 @@
               transition:"all 0.3s",
               userSelect:"none",
             }}>
-              {showWord ? (bar.word||"") : ""}
+              {bar.word||""}
             </div>
 
             {isCurrent && (
@@ -1276,7 +1242,7 @@
       );
     }
 
-    function BottomPanel({ isPlaying,onPlay,onPause,onBack,beatName,bpm,hintMode,currentBar,totalBars }) {
+    function BottomPanel({ isPlaying,onPlay,onPause,onBack,beatName,bpm,currentBar,totalBars }) {
       return (
         <div style={{
           background:"rgba(12,8,50,0.95)",
@@ -1284,6 +1250,7 @@
           borderTop:"1px solid rgba(255,255,255,0.08)",
           padding:"14px 16px 22px",flexShrink:0,
         }}>
+          <div style={{width:"100%",maxWidth:"min(94vw, 900px)",margin:"0 auto"}}>
           <div style={{
             textAlign:"center",fontSize:10,fontWeight:700,
             letterSpacing:2,color:"rgba(255,255,255,0.38)",
@@ -1334,7 +1301,7 @@
             <div style={{flex:1}}>
               <div style={{fontFamily:"'Nunito'",fontWeight:800,fontSize:14,color:"#fff"}}>{beatName} Beat</div>
               <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>
-                {bpm} BPM · {hintMode}
+                {bpm} BPM
               </div>
             </div>
             <div style={{width:64,display:"flex",flexDirection:"column",gap:4}}>
@@ -1353,6 +1320,7 @@
             fontFamily:"'Nunito'",fontWeight:900,fontSize:12,
             color:"rgba(255,255,255,0.18)",
           }}>TheRhymeGame.com</div>
+          </div>
         </div>
       );
     }
