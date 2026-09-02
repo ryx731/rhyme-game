@@ -13,9 +13,13 @@ abomination to preserve LLB's phone
 and to prevent pouching in SMCS '28.
 
 FEATURES:
+
 3 preset beats
+
 ability to add beats (.m4a files only, thanks garageband)
+
 a lot of features for word sets, scheme, etc.
+
 1 today
 
 most features are broken (fwd beat button) idk also why is it all 1 html file
