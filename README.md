@@ -1,7 +1,6 @@
 ### RHYME GAME - ryx, higgis ###
 inspired by https://rhyme-game2026.vercel.app/
 
-__
 under the tyrannical rule of the
 poolesville high school administration,
 phones have been banned for the 2026-27
