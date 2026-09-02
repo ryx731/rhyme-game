@@ -24,10 +24,3 @@ a lot of features for word sets, scheme, etc.
 
 
 most features are broken (fwd beat button) idk also why is it all 1 html file
-
-
-
-hi guys nchen here
-
-
-i made none of the SINGULAR html file; i did, however, help with the testing process, and also this readme
