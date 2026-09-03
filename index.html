@@ -103,7 +103,11 @@
       { id:"AAXX", label:"AAXX", desc:"Couplet",    pattern:["A","A",null,null] },
       { id:"AXAX", label:"AXAX", desc:"Skip",       pattern:["A",null,"A",null] },
     ];
-    const GROUP_COLORS = { A:"#F97316", B:"#0EA5E9", C:"#EAB308" };
+    const GROUP_COLORS = {
+      A:"#F97316", B:"#0EA5E9", C:"#EAB308", D:"#EC4899",
+      E:"#22C55E", F:"#A855F7", G:"#EF4444", H:"#14B8A6",
+    };
+    const WORD_GROUPS = ["A","B","C","D","E","F","G","H"];
     const SYLLABLE_OPTS= ["1 Syllable","2 Syllables","3 Syllables","All 1+2+3"];
     const DURATIONS = [8,16,32,64];
     const DUR_LABELS = ["8 bars","16 bars","32 bars","64 bars"];
@@ -128,17 +132,31 @@
       C1:["day","way","say","play","stay","slay","pray","they","pay","lay","ray","bay","clay","gray","spray","hey"],
       C2:["display","betray","relay","okay","away","convey","delay","decay","portray","hooray","soiree","cliche","bouquet","melee","risque","buffet"],
       C3:["disobey","ricochet","communique","cabaret","consomme","negligee","disarray","holiday","runaway","getaway","castaway","stowaway","hideaway","faraway","yesterday","anyway"],
+      D1:["ride","side","wide","hide","tide","pride","guide","bride","glide","slide","snide","chide","cried","fried","pied","tried"],
+      D2:["inside","outside","beside","decide","divide","provide","aside","collide","confide","reside","abide","landslide","backside","subside","hillside","seaside"],
+      D3:["override","genocide","homicide","coincide","suicide","pesticide","herbicide","countryside","classified","qualified","specified","notified","satisfied","simplified","justified","fratricide"],
+      E1:["line","mine","fine","shine","sign","spine","vine","wine","dine","nine","twine","brine","swine","shrine","pine","whine"],
+      E2:["define","refine","combine","design","align","assign","decline","incline","online","sunshine","moonshine","deadline","skyline","airline","canine","byline"],
+      E3:["undermine","valentine","porcupine","redefine","intertwine","turpentine","superfine","reassign","underline","columbine","aquiline","storyline","concubine","realign"],
+      F1:["pain","rain","main","gain","brain","chain","plain","stain","train","grain","drain","sprain","vain","cane","lane","plane"],
+      F2:["complain","refrain","explain","campaign","maintain","contain","remain","obtain","sustain","restrain","terrain","humane","insane","arcane","champagne","disdain"],
+      F3:["entertain","ascertain","hurricane","aeroplane","aquaplane","cellophane","underlain","chatelaine"],
+      G1:["rock","lock","sock","block","clock","dock","knock","mock","shock","stock","flock","frock","smock","crock"],
+      G2:["unlock","padlock","deadlock","gridlock","hemlock","shamrock","peacock","livestock","woodstock","warlock","matchlock","forelock","bedrock","restock"],
+      G3:["overstock","shuttlecock","chockablock","hollyhock","interlock","overclock","antiknock"],
+      H1:["moon","soon","spoon","noon","boon","loon","tune","june","dune","prune","swoon","croon"],
+      H2:["balloon","raccoon","cartoon","typhoon","platoon","cocoon","saloon","maroon","lagoon","bassoon","pontoon","monsoon"],
+      H3:["afternoon","honeymoon","macaroon","pantaloon","opportune","importune","picayune"],
     };
 
     function getPool(grp, syl, sets) {
       if (!grp) return [];
-      const g = grp === "B" ? "B" : grp === "C" ? "C" : "A";
       const pools = sets || POOLS;
       const pick = (k) => (pools[k] && pools[k].length ? pools[k] : POOLS[k]) || [];
-      if (syl==="1 Syllable") return pick(g+"1");
-      if (syl==="2 Syllables") return pick(g+"2");
-      if (syl==="3 Syllables") return pick(g+"3");
-      return [...pick(g+"1"),...pick(g+"2"),...pick(g+"3")];
+      if (syl==="1 Syllable") return pick(grp+"1");
+      if (syl==="2 Syllables") return pick(grp+"2");
+      if (syl==="3 Syllables") return pick(grp+"3");
+      return [...pick(grp+"1"),...pick(grp+"2"),...pick(grp+"3")];
     }
 
     function shuffle(arr){ 
@@ -151,12 +169,16 @@
     }
 
     function buildBars(scheme, syl, numBars, sets) {
-      const used={A:0,B:0,C:0};
-      const pools={
-        A:shuffle(getPool("A",syl,sets)),
-        B:shuffle(getPool("B",syl,sets)),
-        C:shuffle(getPool("C",syl,sets))
-      };
+      // Only build pools for the groups this scheme actually uses (currently
+      // just A/B), but this works for any of the 8 word groups so future
+      // schemes can reference more of them without any code changes here.
+      const neededGroups = [...new Set(scheme.pattern.filter(g => g))];
+      const used = {};
+      const pools = {};
+      neededGroups.forEach(g => {
+        used[g] = 0;
+        pools[g] = shuffle(getPool(g, syl, sets));
+      });
       return Array.from({length:numBars},(_,i)=>{
         const grp = scheme.pattern[i%scheme.pattern.length];
         let word = null;
@@ -216,7 +238,7 @@
     // ROOT
     // ═══════════════════════════════════════════════════════════════════════════════
     function RhymeGame() {
-      const [screen,    setScreen]    = useState("home");
+      const [screen,    setScreen]    = useState("landing");
       const [schemeIdx, setSchemeIdx] = useState(0);
       const [sylIdx,    setSylIdx]    = useState(3);
       const [beatIdx,   setBeatIdx]   = useState(0);
@@ -459,6 +481,10 @@
             @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
           `}</style>
 
+          {screen === "landing" && (
+            <LandingScreen onBegin={() => setScreen("home")} />
+          )}
+
           {screen === "home" && (
             <HomeScreen
               schemeIdx={schemeIdx} setSchemeIdx={setSchemeIdx}
@@ -491,6 +517,60 @@
             />
           )}
         </>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // LANDING
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function LandingScreen({ onBegin }) {
+      const [leaving, setLeaving] = useState(false);
+
+      function handleBegin() {
+        setLeaving(true);
+        setTimeout(onBegin, 520); // matches the transition duration below
+      }
+
+      return (
+        <div style={{
+          height:"100%",width:"100%",position:"relative",
+          background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
+          display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+          fontFamily:"'Inter',sans-serif",
+          transform: leaving ? "translateY(-100%)" : "translateY(0)",
+          opacity: leaving ? 0 : 1,
+          transition:"transform 0.5s cubic-bezier(.4,0,.2,1), opacity 0.45s ease",
+          animation:"fadeIn 0.5s ease both",
+        }}>
+          <div style={{fontSize:60,marginBottom:8}}>🎤</div>
+          <div style={{
+            fontFamily:"'Nunito'",fontWeight:900,fontSize:38,color:"#fff",
+            textAlign:"center",lineHeight:1.15,letterSpacing:0.5,
+          }}>
+            The Rhyme<br/>Game
+          </div>
+          <div style={{
+            fontSize:15,color:"rgba(255,255,255,0.55)",fontWeight:500,
+            marginTop:12,marginBottom:44,textAlign:"center",maxWidth:280,
+          }}>
+            Freestyle practice with live rhyme cues and a beat.
+          </div>
+          <button onClick={handleBegin} style={{
+            padding:"17px 52px",
+            background:"#F97316",color:"#fff",
+            borderRadius:16,fontFamily:"'Nunito'",fontWeight:900,fontSize:20,
+            boxShadow:"0 6px 28px rgba(249,115,22,0.5)",border:"none",
+            transition:"transform 0.1s",
+          }}
+          onMouseDown={e=>e.currentTarget.style.transform="scale(0.96)"}
+          onMouseUp={e=>e.currentTarget.style.transform="scale(1)"}
+          >Begin ▶</button>
+          <div style={{
+            position:"absolute",bottom:22,
+            fontFamily:"'Nunito'",fontWeight:900,fontSize:12,
+            color:"rgba(255,255,255,0.18)",
+          }}>TheRhymeGame.com</div>
+        </div>
       );
     }
 
@@ -804,11 +884,14 @@
         if (activeIdx >= idx && activeIdx > 0) setActiveIdx(activeIdx - 1);
       }
 
+      const ACCEPTED_AUDIO_EXTS = ['.m4a','.mp3','.wav','.ogg','.aac'];
+
       function handleFileSelect(e) {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (!file.name.toLowerCase().endsWith('.m4a')) {
-          alert("Please select an .m4a file");
+        const lower = file.name.toLowerCase();
+        if (!ACCEPTED_AUDIO_EXTS.some(ext => lower.endsWith(ext))) {
+          alert("Please select an audio file (MP3, WAV, M4A, OGG, or AAC)");
           return;
         }
         setUploadFile(file);
@@ -965,7 +1048,19 @@
               background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.12)",
               borderRadius:18,padding:16,marginTop:16,
             }}>
-              <div style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.5)",marginBottom:14}}>UPLOAD BEAT (.m4a)</div>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.5)",marginBottom:14}}>UPLOAD BEAT (MP3, WAV, M4A...)</div>
+
+              <a href="https://pixabay.com/music/search/genre/hip-hop-rap/" target="_blank" rel="noopener noreferrer" style={{
+                display:"flex",alignItems:"center",gap:10,textDecoration:"none",
+                background:"rgba(14,165,233,0.14)",border:"1px solid rgba(14,165,233,0.35)",
+                borderRadius:12,padding:"11px 14px",marginBottom:16,
+              }}>
+                <span style={{fontSize:18}}>🔗</span>
+                <div>
+                  <div style={{fontSize:13,fontWeight:800,color:"#0EA5E9"}}>Browse free beats on Pixabay ↗</div>
+                  <div style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>No sign-up — download an MP3, then upload it below</div>
+                </div>
+              </a>
 
               <div style={{marginBottom:12}}>
                 <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:6}}>Beat Name</div>
@@ -979,9 +1074,9 @@
 
               <div style={{marginBottom:12}}>
                 <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:6}}>
-                  {uploadFile ? "File: " + uploadFile.name : "Select .m4a file"}
+                  {uploadFile ? "File: " + uploadFile.name : "Select an audio file"}
                 </div>
-                <input type="file" accept=".m4a" onChange={handleFileSelect}
+                <input type="file" accept=".m4a,.mp3,.wav,.ogg,.aac,audio/*" onChange={handleFileSelect}
                   style={{
                     width:"100%",padding:"10px 12px",borderRadius:10,
                     background:"rgba(0,0,0,0.2)",border:"1px solid rgba(255,255,255,0.15)",
@@ -1056,10 +1151,10 @@
           <div style={{width:"100%",maxWidth:"min(94vw, 640px)",margin:"0 auto"}}>
             <BuilderHeader title="Word Sets" onBack={onBack} />
 
-            <div style={{display:"flex",gap:8,marginBottom:10}}>
-              {["A","B","C"].map(g=>(
+            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:10}}>
+              {WORD_GROUPS.map(g=>(
                 <button key={g} onClick={()=>setGroup(g)} style={{
-                  flex:1,padding:"10px 4px",borderRadius:12,
+                  flexBasis:"calc(25% - 6px)",flexGrow:1,padding:"10px 4px",borderRadius:12,
                   background: group===g ? GROUP_COLORS[g] : "rgba(255,255,255,0.09)",
                   color:      group===g ? "#111" : "rgba(255,255,255,0.6)",
                   fontFamily:"'Nunito'",fontWeight:900,fontSize:14,
@@ -1191,14 +1286,24 @@
       );
     }
 
+    // The row holds 4 equal-width blocks in a flex row with small gaps between
+    // them — the tick marks and the ball both need to land on each block's
+    // actual center (12.5%, 37.5%, 62.5%, 87.5%), not on evenly-spaced points
+    // across the row's full 0–100% span, which is what caused the previous
+    // mismatch between the ticks/ball and the blocks they're meant to mark.
+    const TICK_POSITIONS = [12.5, 37.5, 62.5, 87.5];
+
     function BarRow({ refCb, bar, isCurrent, isPast, opacity, isPlaying, beatInBar, beatFrac }) {
       const color = bar.group ? GROUP_COLORS[bar.group] : null;
-      const ballXFrac   = (beatInBar + beatFrac) / 4;
       const bounceY     = Math.sin(beatFrac * Math.PI);
       const BALL_R      = 17;
       const rowPixH     = isCurrent ? ROW_H + 10 : ROW_H;
       const ballBottom  = 10 + bounceY * (rowPixH * 0.55);
-      const ballLeftPct = 3 + ballXFrac * 94;
+      // Ball glides from the current beat's tick toward the next one, landing
+      // exactly on each tick right as that beat starts (beatFrac === 0).
+      const fromPct     = TICK_POSITIONS[beatInBar];
+      const toPct       = beatInBar < 3 ? TICK_POSITIONS[beatInBar + 1] : 97;
+      const ballLeftPct = fromPct + (toPct - fromPct) * beatFrac;
 
       return (
         <div
@@ -1271,7 +1376,7 @@
                   pointerEvents:"none",
                 }}/>
                 {[0,1,2,3].map(i=>{
-                  const xPct = 3+(i/3)*94;
+                  const xPct = TICK_POSITIONS[i];
                   const isActive = i===beatInBar;
                   return (
                     <div key={i} style={{
