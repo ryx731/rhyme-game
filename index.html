@@ -113,7 +113,16 @@
     const DUR_LABELS = ["8 bars","16 bars","32 bars","64 bars"];
     const ROW_H = 96;
     const BEAT_STYLES = ["boom-bap","lofi","trap"];
-    const BEAT_STYLE_LABELS = { "boom-bap":"Boom Bap", "lofi":"Lo-Fi", "trap":"Trap" };
+    const BEAT_STYLE_LABELS = { "boom-bap":"Boom Bap", "lofi":"Lo-Fi", "trap":"Trap", "upload":"Uploaded", "url":"Online" };
+    // A handful of verified, license-clear (CC0 / public domain) instrumental
+    // tracks hosted on Wikimedia Commons, which serves media with permissive
+    // cross-origin headers — so these can be fetched and played directly,
+    // no manual download+upload round trip required. Special:FilePath is a
+    // stable redirect that always resolves to the current file location.
+    const QUICK_PICK_BEATS = [
+      { name:"Friendly Evil Gangsta (Synth Hip Hop)", url:"https://commons.wikimedia.org/wiki/Special:FilePath/Friendly_Evil_Gangsta_Synth_Hip_Hop.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
+      { name:"Happy Happy HardPopCoreTastic", url:"https://commons.wikimedia.org/wiki/Special:FilePath/Happy_Happy_HardPopCoreTastic.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
+    ];
 
     const DEFAULT_BEATS = [
       { name:"Boom Bap", bpm:88,  style:"boom-bap" },
@@ -221,6 +230,68 @@
         if (grp) { word = pools[grp][used[grp]%Math.max(1,pools[grp].length)]; used[grp]++; }
         return { barNum:i+1, word, group:grp };
       });
+    }
+
+    // ─── BPM Detection ────────────────────────────────────────────────────────────
+    // Lightweight onset-detection + autocorrelation tempo estimator. Not
+    // studio-grade, but good enough to give a solid starting guess for any
+    // uploaded or fetched track — the BPM slider stays fully editable
+    // afterward in case it guesses wrong (very syncopated beats, silence at
+    // the start, etc).
+    function detectBPM(audioBuffer) {
+      try {
+        const sampleRate = audioBuffer.sampleRate;
+        const raw = audioBuffer.getChannelData(0);
+        // Only analyze the first ~45s — plenty for a stable tempo estimate
+        // and keeps this fast even on long tracks.
+        const analyzeSamples = Math.min(raw.length, sampleRate * 45);
+
+        // Collapse to a coarse energy envelope (~200 frames/sec).
+        const chunkSize = Math.max(1, Math.floor(sampleRate / 200));
+        const numChunks = Math.floor(analyzeSamples / chunkSize);
+        if (numChunks < 20) return null;
+        const envelope = new Float32Array(numChunks);
+        for (let i = 0; i < numChunks; i++) {
+          let sum = 0;
+          const start = i * chunkSize;
+          for (let j = 0; j < chunkSize; j++) {
+            const v = raw[start + j];
+            sum += v * v;
+          }
+          envelope[i] = Math.sqrt(sum / chunkSize);
+        }
+
+        // Onset/novelty function: positive-only energy rises (percussive hits).
+        const novelty = new Float32Array(numChunks);
+        for (let i = 1; i < numChunks; i++) {
+          const d = envelope[i] - envelope[i - 1];
+          novelty[i] = d > 0 ? d : 0;
+        }
+
+        // Autocorrelate the novelty curve across lags spanning 60–200 BPM,
+        // picking the lag (i.e. beat period) with the strongest self-similarity.
+        const chunkRate = sampleRate / chunkSize;
+        const minLag = Math.max(1, Math.round(chunkRate * 60 / 200));
+        const maxLag = Math.round(chunkRate * 60 / 60);
+        let bestLag = minLag, bestScore = -Infinity;
+        for (let lag = minLag; lag <= maxLag; lag++) {
+          let score = 0;
+          for (let i = 0; i + lag < numChunks; i++) {
+            score += novelty[i] * novelty[i + lag];
+          }
+          if (score > bestScore) { bestScore = score; bestLag = lag; }
+        }
+        if (bestScore <= 0) return null;
+
+        let bpm = (60 * chunkRate) / bestLag;
+        // Fold octave errors (half/double time) into a musically typical range.
+        while (bpm < 70) bpm *= 2;
+        while (bpm > 180) bpm /= 2;
+        return Math.round(bpm);
+      } catch (e) {
+        console.error("BPM detection failed:", e);
+        return null;
+      }
     }
 
     // ─── Audio ────────────────────────────────────────────────────────────────────
