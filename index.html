@@ -128,9 +128,42 @@
     // no manual download+upload round trip required. Special:FilePath is a
     // stable redirect that always resolves to the current file location.
     const QUICK_PICK_BEATS = [
-      { name:"Friendly Evil Gangsta (Synth Hip Hop)", bpm:82, url:"https://commons.wikimedia.org/wiki/Special:FilePath/Friendly_Evil_Gangsta_Synth_Hip_Hop.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
-      { name:"Happy Happy HardPopCoreTastic", bpm:118, url:"https://commons.wikimedia.org/wiki/Special:FilePath/Happy_Happy_HardPopCoreTastic.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
+      { name:"Friendly Evil Gangsta (Synth Hip Hop)", bpm:82, file:"Friendly_Evil_Gangsta_Synth_Hip_Hop.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
+      { name:"Happy Happy HardPopCoreTastic", bpm:118, file:"Happy_Happy_HardPopCoreTastic.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
     ];
+
+    // Wikimedia's file pages (commons.wikimedia.org/wiki/Special:FilePath/...)
+    // redirect to the actual CDN file on upload.wikimedia.org, but the
+    // redirect hop itself doesn't carry CORS headers, so browsers block a
+    // plain fetch() before it ever reaches the CDN response that *does* have
+    // them. The MediaWiki API sidesteps this: calling api.php with
+    // `origin=*` returns a CORS-enabled JSON response containing the file's
+    // real, final CDN URL, which can then be fetched directly with no
+    // redirect involved.
+    async function resolveCommonsFileUrl(filename) {
+      const api = "https://commons.wikimedia.org/w/api.php?action=query&titles="
+        + encodeURIComponent("File:" + filename)
+        + "&prop=imageinfo&iiprop=url&format=json&origin=*";
+      const res = await fetch(api);
+      if (!res.ok) throw new Error("Wikimedia API HTTP " + res.status);
+      const data = await res.json();
+      const pages = data.query && data.query.pages;
+      const page = pages && Object.values(pages)[0];
+      const url = page && page.imageinfo && page.imageinfo[0] && page.imageinfo[0].url;
+      if (!url) throw new Error("Could not resolve file URL from Wikimedia API");
+      return url;
+    }
+
+    // If a pasted URL is a Wikimedia Commons file/page link rather than a
+    // direct CDN link, resolve it to the real file URL first. Otherwise use
+    // it as-is (other hosts may or may not allow cross-origin fetches).
+    async function resolveDirectAudioUrl(url) {
+      const specialFilePath = url.match(/commons\.wikimedia\.org\/wiki\/Special:FilePath\/([^?#]+)/);
+      const filePage = url.match(/commons\.wikimedia\.org\/wiki\/File:([^?#]+)/);
+      const filename = specialFilePath ? specialFilePath[1] : filePage ? filePage[1] : null;
+      if (filename) return await resolveCommonsFileUrl(decodeURIComponent(filename));
+      return url;
+    }
 
     const DEFAULT_BEATS = [
       { name:"Boom Bap", bpm:88,  style:"boom-bap" },
@@ -1178,14 +1211,15 @@
         setLibraryError(null);
         setLibraryBusy(item.name);
         try {
-          const res = await fetch(item.url);
+          const directUrl = await resolveCommonsFileUrl(item.file);
+          const res = await fetch(directUrl);
           if (!res.ok) throw new Error("HTTP " + res.status);
           const arrayBuffer = await res.arrayBuffer();
           setBeats(prev => [...prev, {
             name: item.name,
             bpm: item.bpm,
             style: "upload",
-            url: item.url,
+            url: directUrl,
             credit: item.credit,
             audioData: arrayBuffer,
           }]);
@@ -1200,12 +1234,13 @@
       const alreadyAdded = (name) => beats.some(b => b.name === name);
 
       async function addCustomUrlBeat() {
-        const url = customUrl.trim();
+        const rawUrl = customUrl.trim();
         const trimmedName = customName.trim();
-        if (!url || !trimmedName) return;
+        if (!rawUrl || !trimmedName) return;
         setCustomError(null);
         setCustomBusy(true);
         try {
+          const url = await resolveDirectAudioUrl(rawUrl);
           const res = await fetch(url);
           if (!res.ok) throw new Error("HTTP " + res.status);
           const arrayBuffer = await res.arrayBuffer();
@@ -1393,7 +1428,7 @@
                     }}>
                       <div style={{
                         width:36,height:36,borderRadius:8,flexShrink:0,
-                        background:"linear-gradient(135deg,#0EA5E9,#22C55E)",
+                        background:"linear-gradient(135deg,#7c3aed,#2563eb)",
                         display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,
                       }}>🌐</div>
                       <div style={{flex:1,minWidth:0}}>
