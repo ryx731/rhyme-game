@@ -87,9 +87,9 @@
 <body>
   <div id="root"></div>
 
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.28.4/babel.min.js"></script>
 
   <script type="text/babel">
     const { useState, useEffect, useRef, useCallback } = React;
@@ -281,25 +281,12 @@
       const [durIdx,    setDurIdx]    = useState(1);
       const [bars,      setBars]      = useState([]);
       const [ballSpeed, setBallSpeed] = useState(1);
+      const [justFinished, setJustFinished] = useState(false);
 
-      const [beats, setBeats] = useState(() => {
-        const saved = localStorage.getItem("rhyme_beats");
-        if (!saved) return DEFAULT_BEATS;
-        try {
-          const parsed = JSON.parse(saved);
-          // Uploaded beats' audio can't be persisted (see the save effect below),
-          // so any "upload" entry surviving in storage is a stale leftover with
-          // no real audio behind it — drop it instead of letting it fail to decode.
-          const cleaned = Array.isArray(parsed) ? parsed.filter(b => b.style !== "upload") : [];
-          return cleaned.length ? cleaned : DEFAULT_BEATS;
-        } catch (e) {
-          return DEFAULT_BEATS;
-        }
-      });
-      const [wordSets, setWordSets] = useState(() => {
-        const saved = localStorage.getItem("rhyme_words");
-        return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(POOLS));
-      });
+      const [beats, setBeats] = useState(DEFAULT_BEATS);
+      const [wordSets, setWordSets] = useState(() => JSON.parse(JSON.stringify(POOLS)));
+      const storageLoaded = useRef(false);
+      const [storageReady, setStorageReady] = useState(false);
 
       const [isPlaying,   setIsPlaying]   = useState(false);
       const [currentBar,  setCurrentBar]  = useState(0);
@@ -316,27 +303,66 @@
       const rowRefs   = useRef({});
       const scrollRef = useRef(null);
 
+      // Load any previously saved beats/word sets from persistent storage once
+      // on mount. Using window.storage instead of localStorage because
+      // localStorage isn't available/reliable inside the artifact sandbox.
       useEffect(() => {
-        // An ArrayBuffer can't survive JSON.stringify (it silently turns into "{}"),
-        // so persisting an uploaded beat's raw audio here would just corrupt it and
-        // fail to decode on the next load. Save everything except that binary data —
-        // uploaded beats simply need to be re-added after a full page reload.
-        try {
-          const toSave = beats.map(b => {
-            if (b.style === "upload") {
-              const { audioData, ...rest } = b;
-              return rest;
+        (async () => {
+          try {
+            const savedBeats = await window.storage.get('rhyme_beats', false);
+            if (savedBeats && savedBeats.value) {
+              const parsed = JSON.parse(savedBeats.value);
+              // Uploaded beats' audio can't be persisted (see the save effect
+              // below), so any "upload" entry surviving in storage is a stale
+              // leftover with no real audio behind it — drop it instead of
+              // letting it fail to decode.
+              const cleaned = Array.isArray(parsed) ? parsed.filter(b => b.style !== "upload") : [];
+              if (cleaned.length) setBeats(cleaned);
             }
-            return b;
-          });
-          localStorage.setItem("rhyme_beats", JSON.stringify(toSave));
-        } catch (e) {
-          console.error("Could not save beats to localStorage:", e);
-        }
-      }, [beats]);
+          } catch (e) { /* nothing saved yet */ }
+          try {
+            const savedWords = await window.storage.get('rhyme_words', false);
+            if (savedWords && savedWords.value) {
+              setWordSets(JSON.parse(savedWords.value));
+            }
+          } catch (e) { /* nothing saved yet */ }
+          storageLoaded.current = true;
+          setStorageReady(true);
+        })();
+      }, []);
+
       useEffect(() => {
-        localStorage.setItem("rhyme_words", JSON.stringify(wordSets));
-      }, [wordSets]);
+        if (!storageReady) return;
+        (async () => {
+          try {
+            // An ArrayBuffer can't survive JSON.stringify (it silently turns into "{}"),
+            // so persisting an uploaded beat's raw audio here would just corrupt it and
+            // fail to decode on the next load. Save everything except that binary data —
+            // uploaded beats simply need to be re-added after a full page reload.
+            const toSave = beats.map(b => {
+              if (b.style === "upload") {
+                const { audioData, ...rest } = b;
+                return rest;
+              }
+              return b;
+            });
+            await window.storage.set('rhyme_beats', JSON.stringify(toSave), false);
+          } catch (e) {
+            console.error("Could not save beats:", e);
+          }
+        })();
+      }, [beats, storageReady]);
+
+      useEffect(() => {
+        if (!storageReady) return;
+        (async () => {
+          try {
+            await window.storage.set('rhyme_words', JSON.stringify(wordSets), false);
+          } catch (e) {
+            console.error("Could not save word sets:", e);
+          }
+        })();
+      }, [wordSets, storageReady]);
 
       useEffect(() => {
         if (beatIdx > beats.length - 1) setBeatIdx(0);
@@ -363,8 +389,11 @@
       }, [currentBar, screen]);
 
       const startSession = () => {
+        // Fresh shuffle of words every time a freestyle session begins, so
+        // replaying with the same settings doesn't repeat the same lines.
+        setBars(buildBars(scheme, syl, numBars, wordSets));
         setCurrentBar(0); setBeatInBar(0); setBeatFrac(0);
-        bCount.current = 0; setIsPlaying(false);
+        bCount.current = 0; setIsPlaying(false); setJustFinished(false);
         setScreen("game");
       };
 
@@ -374,6 +403,7 @@
           alert("Web Audio API not supported on this browser.");
           return;
         }
+        setJustFinished(false);
 
         // If we already have a live context (user hit Pause, not Back), just
         // resume it instead of tearing it down and building a new one. Mobile
@@ -486,26 +516,49 @@
         setIsPlaying(false);
       }, []);
 
+      // Called once the last bar has fully played through. Stops all audio
+      // (closing the AudioContext kills the loop/scheduler for good, instead
+      // of letting the beat keep looping forever) and shuffles a brand new
+      // set of words in for the next freestyle.
+      const finishSession = useCallback(() => {
+        closeAudio();
+        setJustFinished(true);
+        setBars(buildBars(scheme, syl, numBars, wordSets));
+      }, [closeAudio, scheme, syl, numBars, wordSets]);
+
       useEffect(() => {
         if (!isPlaying) return;
         let lastBar = -1;
+        let finished = false;
         const tick = () => {
           const ctx = audioCtx.current;
           if (!ctx) return;
           const elapsed = Math.max(0, ctx.currentTime - startT.current);
           const total   = elapsed / spb;
           const barIdx  = Math.floor(total / 4);
+
+          if (barIdx >= bars.length) {
+            if (!finished) {
+              finished = true;
+              setCurrentBar(bars.length - 1);
+              setBeatInBar(3);
+              setBeatFrac(0);
+              finishSession();
+            }
+            return; // stop scheduling further ticks — session is over
+          }
+
           setBeatInBar(Math.floor(total) % 4);
           setBeatFrac(total % 1);
           if (barIdx !== lastBar) {
             lastBar = barIdx;
-            setCurrentBar(Math.min(barIdx, bars.length - 1));
+            setCurrentBar(barIdx);
           }
           animRef.current = requestAnimationFrame(tick);
         };
         animRef.current = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(animRef.current);
-      }, [isPlaying, spb, bars.length]);
+      }, [isPlaying, spb, bars.length, finishSession]);
 
       useEffect(() => () => closeAudio(), [closeAudio]);
 
@@ -542,6 +595,7 @@
               beatInBar={beatInBar}
               beatFrac={beatFrac}
               isPlaying={isPlaying}
+              justFinished={justFinished}
               onPlay={startPlay}
               onPause={pausePlay}
               onBack={goHome}
@@ -1279,7 +1333,7 @@
     // ═══════════════════════════════════════════════════════════════════════════════
     // GAME
     // ═══════════════════════════════════════════════════════════════════════════════
-    function GameScreen({ bars,currentBar,beatInBar,beatFrac,isPlaying,
+    function GameScreen({ bars,currentBar,beatInBar,beatFrac,isPlaying,justFinished,
       onPlay,onPause,onBack,beatName,bpm,scrollRef,rowRefs }) {
       return (
         <div style={{
@@ -1314,7 +1368,7 @@
           </div>
 
           <BottomPanel
-            isPlaying={isPlaying} onPlay={onPlay} onPause={onPause} onBack={onBack}
+            isPlaying={isPlaying} justFinished={justFinished} onPlay={onPlay} onPause={onPause} onBack={onBack}
             beatName={beatName} bpm={bpm}
             currentBar={currentBar} totalBars={bars.length}
           />
@@ -1468,7 +1522,7 @@
       );
     }
 
-    function BottomPanel({ isPlaying,onPlay,onPause,onBack,beatName,bpm,currentBar,totalBars }) {
+    function BottomPanel({ isPlaying,justFinished,onPlay,onPause,onBack,beatName,bpm,currentBar,totalBars }) {
       return (
         <div style={{
           background:"rgba(12,8,50,0.95)",
@@ -1479,14 +1533,23 @@
           <div style={{width:"100%",maxWidth:"min(94vw, 900px)",margin:"0 auto"}}>
           <div style={{
             textAlign:"center",fontSize:10,fontWeight:700,
-            letterSpacing:2,color:"rgba(255,255,255,0.38)",
+            letterSpacing:2,color: justFinished ? "#22C55E" : "rgba(255,255,255,0.38)",
             marginBottom:3,textTransform:"uppercase",
           }}>
-            {isPlaying ? `Bar ${currentBar+1} of ${totalBars}` : "GAME PAUSED"}
+            {isPlaying
+              ? `Bar ${currentBar+1} of ${totalBars}`
+              : justFinished
+                ? "🎉 FREESTYLE COMPLETE — WORDS SHUFFLED"
+                : "GAME PAUSED"}
           </div>
-          {!isPlaying && (
+          {!isPlaying && !justFinished && (
             <div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.28)",marginBottom:10}}>
               Swipe Up &amp; Down On Screen to Scroll
+            </div>
+          )}
+          {!isPlaying && justFinished && (
+            <div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.28)",marginBottom:10}}>
+              Fresh words are ready — hit play to go again
             </div>
           )}
 
@@ -1505,7 +1568,7 @@
               boxShadow: isPlaying?"none":"0 3px 18px rgba(249,115,22,0.55)",
               transition:"all 0.15s",
             }}>
-              {isPlaying?"⏸ Pause":"▶ Play Beat"}
+              {isPlaying?"⏸ Pause":justFinished?"▶ Play Again":"▶ Play Beat"}
             </button>
 
             <button style={{
