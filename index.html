@@ -106,8 +106,16 @@
     const GROUP_COLORS = {
       A:"#F97316", B:"#0EA5E9", C:"#EAB308", D:"#EC4899",
       E:"#22C55E", F:"#A855F7", G:"#EF4444", H:"#14B8A6",
+      I:"#F59E0B", J:"#3B82F6", K:"#84CC16", L:"#D946EF",
+      M:"#10B981", N:"#F43F5E", O:"#6366F1", P:"#EAB308",
+      Q:"#06B6D4", R:"#F97316", S:"#A3E635", T:"#8B5CF6",
     };
-    const WORD_GROUPS = ["A","B","C","D","E","F","G","H"];
+    // All 20 rhyme families actually stocked with words in POOLS (A–T) —
+    // this drives both the Word Sets editor's group picker and the random
+    // family assignment each freestyle session pulls from. Previously this
+    // list stopped at "H", so families I–T were fully populated but never
+    // reachable anywhere in the app.
+    const WORD_GROUPS = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T"];
     const SYLLABLE_OPTS= ["1 Syllable","2 Syllables","3 Syllables","All 1+2+3"];
     const DURATIONS = [8,16,32,64];
     const DUR_LABELS = ["8 bars","16 bars","32 bars","64 bars"];
@@ -120,8 +128,8 @@
     // no manual download+upload round trip required. Special:FilePath is a
     // stable redirect that always resolves to the current file location.
     const QUICK_PICK_BEATS = [
-      { name:"Friendly Evil Gangsta (Synth Hip Hop)", url:"https://commons.wikimedia.org/wiki/Special:FilePath/Friendly_Evil_Gangsta_Synth_Hip_Hop.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
-      { name:"Happy Happy HardPopCoreTastic", url:"https://commons.wikimedia.org/wiki/Special:FilePath/Happy_Happy_HardPopCoreTastic.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
+      { name:"Friendly Evil Gangsta (Synth Hip Hop)", bpm:82, url:"https://commons.wikimedia.org/wiki/Special:FilePath/Friendly_Evil_Gangsta_Synth_Hip_Hop.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
+      { name:"Happy Happy HardPopCoreTastic", bpm:118, url:"https://commons.wikimedia.org/wiki/Special:FilePath/Happy_Happy_HardPopCoreTastic.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
     ];
 
     const DEFAULT_BEATS = [
@@ -178,10 +186,10 @@
       O2: ["bulldog", "bullfrog", "hotdog", "eggnog", "groundhog", "hedgehog", "leapfrog", "backlog", "unclog", "watchdog", "updog"],
       O3: ["underdog", "catalogue", "monologue", "dialogue", "epilogue", "travelogue", "polliwog", "synagogue"],
       P1: ["pen", "ten", "men", "hen", "den", "when", "then", "glen", "zen", "wren"],
-      P2: ["again", "amen", " cayenne", "hyphen", "often", "soften", "lappen", "kingman"],
+      P2: ["again", "amen", "cayenne", "hyphen", "often", "soften", "happen", "kingpin"],
       P3: ["neveragain", "gentlemen", "nowandthen"],
       Q1: ["cat", "hat", "mat", "flat", "that", "rat", "bat", "sat", "fat", "pat", "chat", "scat", "stat", "spat", "vat", "gnat"],
-      Q2: ["combat", "format", "doormat", "wombat", "wildcat", "caveat", "copycat", "democrat", "heformat", "scaredycat"],
+      Q2: ["combat", "format", "doormat", "wombat", "wildcat", "caveat", "copycat", "democrat", "reformat", "scaredycat"],
       Q3: ["aristocrat", "bureaucrat", "technocrat", "diplomat", "autocrat", "thermostat", "laundromat"],
       R1: ["hit", "sit", "fit", "bit", "lit", "pit", "quit", "split", "spit", "grit", "knit", "skit", "mit", "wit", "sh*t"],
       R2: ["admit", "commit", "submit", "permit", "hermit", "transmit", "omit", "remit", "acquit", "outfit", "misfit", "retrofit"],
@@ -213,22 +221,37 @@
       return a; 
     }
 
-    function buildBars(scheme, syl, numBars, sets) {
+    // Picks a random, non-repeating actual word-group letter (A–H) for each
+    // abstract slot ("A"/"B") that a scheme's pattern uses. This is what lets
+    // a session pull from any of the 8 rhyme families instead of always
+    // literally being groups A and B — the single biggest lever on perceived
+    // word variety, since every family has its own ~15-40 word pool.
+    function assignRandomGroups(scheme) {
+      const slots = [...new Set(scheme.pattern.filter(Boolean))];
+      const pool = shuffle(WORD_GROUPS);
+      const map = {};
+      slots.forEach((slot, i) => { map[slot] = pool[i % pool.length]; });
+      return map;
+    }
+
+    function buildBars(scheme, syl, numBars, sets, groupMap) {
       // Only build pools for the groups this scheme actually uses (currently
       // just A/B), but this works for any of the 8 word groups so future
       // schemes can reference more of them without any code changes here.
-      const neededGroups = [...new Set(scheme.pattern.filter(g => g))];
+      const neededSlots = [...new Set(scheme.pattern.filter(g => g))];
       const used = {};
       const pools = {};
-      neededGroups.forEach(g => {
-        used[g] = 0;
-        pools[g] = shuffle(getPool(g, syl, sets));
+      neededSlots.forEach(slot => {
+        const actualGroup = (groupMap && groupMap[slot]) || slot;
+        used[slot] = 0;
+        pools[slot] = shuffle(getPool(actualGroup, syl, sets));
       });
       return Array.from({length:numBars},(_,i)=>{
-        const grp = scheme.pattern[i%scheme.pattern.length];
+        const slot = scheme.pattern[i%scheme.pattern.length];
         let word = null;
-        if (grp) { word = pools[grp][used[grp]%Math.max(1,pools[grp].length)]; used[grp]++; }
-        return { barNum:i+1, word, group:grp };
+        const actualGroup = slot ? ((groupMap && groupMap[slot]) || slot) : null;
+        if (slot) { word = pools[slot][used[slot]%Math.max(1,pools[slot].length)]; used[slot]++; }
+        return { barNum:i+1, word, group:actualGroup };
       });
     }
 
@@ -383,11 +406,15 @@
             const savedBeats = await window.storage.get('rhyme_beats', false);
             if (savedBeats && savedBeats.value) {
               const parsed = JSON.parse(savedBeats.value);
-              // Uploaded beats' audio can't be persisted (see the save effect
-              // below), so any "upload" entry surviving in storage is a stale
-              // leftover with no real audio behind it — drop it instead of
-              // letting it fail to decode.
-              const cleaned = Array.isArray(parsed) ? parsed.filter(b => b.style !== "upload") : [];
+              // Uploaded/online beats' audio can't be persisted as raw bytes
+              // (see the save effect below). Local uploads have no way to
+              // re-fetch their audio, so a stale entry with no audioData is
+              // dropped. Online-library beats DO keep their "url" though, so
+              // those are kept and simply re-fetched lazily next time they're
+              // played (see ensureBeatAudio).
+              const cleaned = Array.isArray(parsed)
+                ? parsed.filter(b => b.style !== "upload" || !!b.url)
+                : [];
               if (cleaned.length) setBeats(cleaned);
             }
           } catch (e) { /* nothing saved yet */ }
@@ -408,8 +435,9 @@
           try {
             // An ArrayBuffer can't survive JSON.stringify (it silently turns into "{}"),
             // so persisting an uploaded beat's raw audio here would just corrupt it and
-            // fail to decode on the next load. Save everything except that binary data —
-            // uploaded beats simply need to be re-added after a full page reload.
+            // fail to decode on the next load. Save everything except that binary data.
+            // Beats fetched from the online library keep their "url" field, so they can
+            // be silently re-fetched next time instead of being lost like local uploads.
             const toSave = beats.map(b => {
               if (b.style === "upload") {
                 const { audioData, ...rest } = b;
@@ -460,9 +488,13 @@
       }, [currentBar, screen]);
 
       const startSession = () => {
-        // Fresh shuffle of words every time a freestyle session begins, so
-        // replaying with the same settings doesn't repeat the same lines.
-        setBars(buildBars(scheme, syl, numBars, wordSets));
+        // Fresh shuffle of words every time a freestyle session begins, and a
+        // fresh random assignment of which of the 8 rhyme families the
+        // scheme's "A"/"B" slots pull from — so replaying with the same
+        // settings gives you both new words AND a different rhyme sound
+        // instead of always landing on the same two families.
+        const groupMap = assignRandomGroups(scheme);
+        setBars(buildBars(scheme, syl, numBars, wordSets, groupMap));
         setCurrentBar(0); setBeatInBar(0); setBeatFrac(0);
         bCount.current = 0; setIsPlaying(false); setJustFinished(false);
         setScreen("game");
@@ -505,12 +537,12 @@
         const ctx = new AudioContext();
         const resumeAndPlay = () => {
           audioCtx.current = ctx;
-          
-          if (beat.style === "upload" && beat.audioData) {
-            // Play uploaded beat file. Always decode a copy (slice(0)) — decodeAudioData
-            // detaches the buffer it's given, so decoding the original stored buffer
-            // would break every playback after the first (preview included).
-            ctx.decodeAudioData(beat.audioData.slice(0), (buffer) => {
+
+          const playDecodedBuffer = (arrayBuffer) => {
+            // Always decode a copy (slice(0)) — decodeAudioData detaches the
+            // buffer it's given, so decoding the original stored/cached
+            // buffer directly would break every playback after the first.
+            ctx.decodeAudioData(arrayBuffer.slice(0), (buffer) => {
               const src = ctx.createBufferSource();
               src.buffer = buffer;
               src.connect(ctx.destination);
@@ -524,6 +556,31 @@
               audioCtx.current = null;
               ctx.close();
             });
+          };
+
+          if (beat.style === "upload" && beat.audioData) {
+            // Local upload or an already-fetched online-library track.
+            playDecodedBuffer(beat.audioData);
+          } else if (beat.style === "upload" && beat.url) {
+            // Online-library beat whose audio hasn't been fetched yet this
+            // session (e.g. right after a page reload, since raw audio bytes
+            // aren't persisted). Fetch it now, then play it, and cache the
+            // bytes on the beat object so this only happens once.
+            fetch(beat.url)
+              .then(res => {
+                if (!res.ok) throw new Error("HTTP " + res.status);
+                return res.arrayBuffer();
+              })
+              .then(arrayBuffer => {
+                setBeats(prev => prev.map(b => b === beat ? { ...b, audioData: arrayBuffer } : b));
+                playDecodedBuffer(arrayBuffer);
+              })
+              .catch(err => {
+                console.error("Fetch error:", err);
+                alert("Could not load this beat from the library. Check your connection and try again.");
+                audioCtx.current = null;
+                ctx.close();
+              });
           } else {
             // Play synthesized beat
             schedFn.current = makeEngine(ctx, beat.style);
@@ -563,7 +620,7 @@
           unlock();
           resumeAndPlay();
         });
-      }, [beat.style, beat.audioData, spb]);
+      }, [beat.style, beat.audioData, beat.url, spb]);
 
       const pausePlay = useCallback(() => {
         clearTimeout(timerRef.current);
@@ -590,11 +647,11 @@
       // Called once the last bar has fully played through. Stops all audio
       // (closing the AudioContext kills the loop/scheduler for good, instead
       // of letting the beat keep looping forever) and shuffles a brand new
-      // set of words in for the next freestyle.
+      // set of words (and rhyme families) in for the next freestyle.
       const finishSession = useCallback(() => {
         closeAudio();
         setJustFinished(true);
-        setBars(buildBars(scheme, syl, numBars, wordSets));
+        setBars(buildBars(scheme, syl, numBars, wordSets, assignRandomGroups(scheme)));
       }, [closeAudio, scheme, syl, numBars, wordSets]);
 
       useEffect(() => {
@@ -639,6 +696,7 @@
         <>
           <style>{`
             @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+            @keyframes spin{to{transform:rotate(360deg)}}
           `}</style>
 
           {screen === "landing" && (
@@ -784,6 +842,11 @@
                   <span style={{fontSize:20}}>🔢</span>{syl}
                 </div>
                 <CircleBtn onClick={()=>setSylIdx(i=>(i+1)%SYLLABLE_OPTS.length)}>›</CircleBtn>
+              </div>
+              <div style={{
+                marginTop:10,fontSize:11,color:"rgba(255,255,255,0.4)",lineHeight:1.4,
+              }}>
+                Each freestyle now pulls from a random pair of the 20 built-in rhyme families, so the sounds change every session — not just the words.
               </div>
               <button onClick={() => setSettingMode("words")} style={{
                 marginTop:12,width:"100%",background:"rgba(0,0,0,0.15)",color:"#EAB308",
@@ -952,7 +1015,7 @@
         <div style={{display:"flex",flexDirection:"column",gap:5}}>
           {scheme.pattern.map((grp,i)=>{
             const bar = bars[i];
-            const col = grp ? GROUP_COLORS[grp] : null;
+            const col = grp ? GROUP_COLORS[bar?.group || grp] : null;
             return (
               <div key={i} style={{display:"flex",gap:5}}>
                 {[0,1,2].map(c=>(
@@ -985,6 +1048,20 @@
       const [uploadName, setUploadName] = useState("");
       const [uploadFile, setUploadFile] = useState(null);
       const [uploadBpm, setUploadBpm] = useState(95);
+      const [editIdx, setEditIdx] = useState(null);
+      const [editName, setEditName] = useState("");
+      const [editBpm, setEditBpm] = useState(90);
+
+      // Online library state: tracks which QUICK_PICK_BEATS entry (by name)
+      // is currently being fetched, any per-item error, and a free-form URL
+      // for pulling in beats beyond the curated list.
+      const [libraryBusy, setLibraryBusy] = useState(null);
+      const [libraryError, setLibraryError] = useState(null);
+      const [customUrl, setCustomUrl] = useState("");
+      const [customName, setCustomName] = useState("");
+      const [customBpm, setCustomBpm] = useState(95);
+      const [customBusy, setCustomBusy] = useState(false);
+      const [customError, setCustomError] = useState(null);
 
       const previewCtx  = useRef(null);
       const previewTimer= useRef(null);
@@ -1005,7 +1082,7 @@
       function togglePreview(idx, b) {
         if (previewIdx === idx) { stopPreview(); return; }
         if (b.style === "upload") {
-          previewUploadedBeat(b);
+          previewUploadedBeat(b, idx);
         } else {
           stopPreview();
           const ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -1043,6 +1120,21 @@
         stopPreview();
         setBeats(prev => prev.filter((_,i)=>i!==idx));
         if (activeIdx >= idx && activeIdx > 0) setActiveIdx(activeIdx - 1);
+        if (editIdx === idx) setEditIdx(null);
+      }
+
+      function openEdit(idx, b) {
+        setEditIdx(idx);
+        setEditName(b.name);
+        setEditBpm(b.bpm);
+      }
+
+      function saveEdit(idx) {
+        const trimmed = editName.trim();
+        if (!trimmed) return;
+        const clampedBpm = Math.max(40, Math.min(220, Math.round(editBpm) || 90));
+        setBeats(prev => prev.map((b,i) => i===idx ? { ...b, name: trimmed, bpm: clampedBpm } : b));
+        setEditIdx(null);
       }
 
       const ACCEPTED_AUDIO_EXTS = ['.m4a','.mp3','.wav','.ogg','.aac'];
@@ -1078,31 +1170,100 @@
         reader.readAsArrayBuffer(uploadFile);
       }
 
-      function previewUploadedBeat(beat) {
-        stopPreview();
-        if (!beat.audioData) return;
-        const ctx = new (window.AudioContext||window.webkitAudioContext)();
-        if (ctx.state === 'suspended') {
-          ctx.resume();
+      // ─── Online library ─────────────────────────────────────────────────
+      // Fetches a curated (or custom-URL) track's audio bytes and adds it to
+      // the beat list, exactly like a local upload — the rest of the app
+      // (playback, persistence, editing) treats it identically from here on.
+      async function addLibraryBeat(item) {
+        setLibraryError(null);
+        setLibraryBusy(item.name);
+        try {
+          const res = await fetch(item.url);
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const arrayBuffer = await res.arrayBuffer();
+          setBeats(prev => [...prev, {
+            name: item.name,
+            bpm: item.bpm,
+            style: "upload",
+            url: item.url,
+            credit: item.credit,
+            audioData: arrayBuffer,
+          }]);
+        } catch (err) {
+          console.error("Library fetch error:", err);
+          setLibraryError("Couldn't load \"" + item.name + "\" — check your connection and try again.");
+        } finally {
+          setLibraryBusy(null);
         }
-        uploadAudioRef.current = ctx;
-        // decodeAudioData detaches/neuters the ArrayBuffer it's given, so decoding
-        // the stored buffer directly would leave it unusable next time (this is
-        // exactly what caused "Cannot decode detached ArrayBuffer" after preview).
-        // Always hand it a fresh copy via slice(0).
-        ctx.decodeAudioData(beat.audioData.slice(0), (buffer) => {
-          const src = ctx.createBufferSource();
-          src.buffer = buffer;
-          src.connect(ctx.destination);
-          src.start(0);
-          src.onended = () => {
-            setPreviewIdx(null);
-          };
-          setPreviewIdx(beats.indexOf(beat));
-        }, (err) => {
-          console.error("Decode error:", err);
-          alert("Could not play this beat file");
-        });
+      }
+
+      const alreadyAdded = (name) => beats.some(b => b.name === name);
+
+      async function addCustomUrlBeat() {
+        const url = customUrl.trim();
+        const trimmedName = customName.trim();
+        if (!url || !trimmedName) return;
+        setCustomError(null);
+        setCustomBusy(true);
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          const arrayBuffer = await res.arrayBuffer();
+          setBeats(prev => [...prev, {
+            name: trimmedName,
+            bpm: Math.max(40, Math.min(220, Math.round(customBpm) || 90)),
+            style: "upload",
+            url,
+            credit: "Added from URL",
+            audioData: arrayBuffer,
+          }]);
+          setCustomUrl(""); setCustomName(""); setCustomBpm(95);
+        } catch (err) {
+          console.error("Custom URL fetch error:", err);
+          setCustomError("Couldn't load that link. Many sites block direct audio fetches (CORS) — Wikimedia Commons / archive.org direct file links tend to work best.");
+        } finally {
+          setCustomBusy(false);
+        }
+      }
+
+      function previewUploadedBeat(beat, idx) {
+        stopPreview();
+        const play = (arrayBuffer) => {
+          const ctx = new (window.AudioContext||window.webkitAudioContext)();
+          if (ctx.state === 'suspended') ctx.resume();
+          uploadAudioRef.current = ctx;
+          // decodeAudioData detaches/neuters the ArrayBuffer it's given, so decoding
+          // the stored buffer directly would leave it unusable next time (this is
+          // exactly what caused "Cannot decode detached ArrayBuffer" after preview).
+          // Always hand it a fresh copy via slice(0).
+          ctx.decodeAudioData(arrayBuffer.slice(0), (buffer) => {
+            const src = ctx.createBufferSource();
+            src.buffer = buffer;
+            src.connect(ctx.destination);
+            src.start(0);
+            src.onended = () => setPreviewIdx(null);
+            setPreviewIdx(idx);
+          }, (err) => {
+            console.error("Decode error:", err);
+            alert("Could not play this beat file");
+          });
+        };
+        if (beat.audioData) {
+          play(beat.audioData);
+        } else if (beat.url) {
+          // Beat survived a reload via its URL but audio bytes weren't kept —
+          // fetch fresh, cache them on the beat, then preview.
+          setLibraryBusy(beat.name);
+          fetch(beat.url).then(res => res.arrayBuffer()).then(arrayBuffer => {
+            setBeats(prev => prev.map(b => b === beat ? { ...b, audioData: arrayBuffer } : b));
+            setLibraryBusy(null);
+            play(arrayBuffer);
+          }).catch(err => {
+            console.error("Fetch error:", err);
+            setLibraryBusy(null);
+            alert("Could not load this beat's audio.");
+          });
+        }
       }
 
       return (
@@ -1113,54 +1274,197 @@
           fontFamily:"'Inter',sans-serif",
           animation:"fadeIn 0.35s ease both",
         }}>
+          <style>{`
+            @keyframes spin{to{transform:rotate(360deg)}}
+          `}</style>
           <div style={{width:"100%",maxWidth:"min(94vw, 640px)",margin:"0 auto"}}>
             <BuilderHeader title="Custom Beats" onBack={() => { stopPreview(); onBack(); }} />
 
             <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
               {beats.map((b,idx)=>(
                 <div key={idx} style={{
-                  display:"flex",alignItems:"center",gap:10,
+                  display:"flex",flexDirection:"column",gap:10,
                   background: idx===activeIdx ? "rgba(249,115,22,0.16)" : "rgba(255,255,255,0.09)",
                   border: idx===activeIdx ? "1px solid rgba(249,115,22,0.5)" : "1px solid rgba(255,255,255,0.12)",
                   borderRadius:14,padding:"10px 12px",
                 }}>
-                  <button onClick={()=>togglePreview(idx,b)} style={{
-                    width:38,height:38,borderRadius:"50%",flexShrink:0,
-                    background: previewIdx===idx ? "#F97316" : "rgba(255,255,255,0.14)",
-                    color:"#fff",fontSize:15,
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                  }}>{previewIdx===idx ? "⏸" : "▶"}</button>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <button onClick={()=>togglePreview(idx,b)} style={{
+                      width:38,height:38,borderRadius:"50%",flexShrink:0,
+                      background: previewIdx===idx ? "#F97316" : "rgba(255,255,255,0.14)",
+                      color:"#fff",fontSize:15,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                    }}>
+                      {libraryBusy===b.name ? "⋯" : previewIdx===idx ? "⏸" : "▶"}
+                    </button>
 
-                  <button onClick={()=>setActiveIdx(idx)} style={{
-                    flex:1,textAlign:"left",background:"none",
-                  }}>
-                    <div style={{fontFamily:"'Nunito'",fontWeight:800,fontSize:15,color:"#fff"}}>{b.name}</div>
-                    <div style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>
-                      {b.bpm} BPM · {BEAT_STYLE_LABELS[b.style]||b.style}
-                    </div>
-                  </button>
+                    <button onClick={()=>setActiveIdx(idx)} style={{
+                      flex:1,textAlign:"left",background:"none",minWidth:0,
+                    }}>
+                      <div style={{fontFamily:"'Nunito'",fontWeight:800,fontSize:15,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.name}</div>
+                      <div style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>
+                        {b.bpm} BPM · {b.credit ? "Online" : (BEAT_STYLE_LABELS[b.style]||b.style)}
+                      </div>
+                    </button>
 
-                  {idx===activeIdx && (
-                    <span style={{fontSize:10,fontWeight:800,color:"#F97316",marginRight:4}}>SELECTED</span>
+                    {idx===activeIdx && (
+                      <span style={{fontSize:10,fontWeight:800,color:"#F97316",marginRight:2,flexShrink:0}}>SELECTED</span>
+                    )}
+
+                    <button onClick={()=>openEdit(idx,b)} style={{
+                      width:30,height:30,borderRadius:"50%",flexShrink:0,
+                      background:"rgba(255,255,255,0.08)",color:"#0EA5E9",fontSize:13,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                    }}>✎</button>
+
+                    <button onClick={()=>deleteBeat(idx)} disabled={beats.length<=1} style={{
+                      width:30,height:30,borderRadius:"50%",flexShrink:0,
+                      background:"rgba(255,255,255,0.08)",
+                      color: beats.length<=1 ? "rgba(255,255,255,0.2)" : "#fca5a5",
+                      fontSize:14,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      opacity: beats.length<=1 ? 0.5 : 1,
+                    }}>✕</button>
+                  </div>
+
+                  {b.credit && (
+                    <div style={{fontSize:10,color:"rgba(255,255,255,0.32)",paddingLeft:48}}>{b.credit}</div>
                   )}
 
-                  <button onClick={()=>deleteBeat(idx)} disabled={beats.length<=1} style={{
-                    width:30,height:30,borderRadius:"50%",flexShrink:0,
-                    background:"rgba(255,255,255,0.08)",
-                    color: beats.length<=1 ? "rgba(255,255,255,0.2)" : "#fca5a5",
-                    fontSize:14,
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    opacity: beats.length<=1 ? 0.5 : 1,
-                  }}>✕</button>
+                  {editIdx === idx && (
+                    <div style={{
+                      background:"rgba(0,0,0,0.2)",borderRadius:10,padding:12,
+                      display:"flex",flexDirection:"column",gap:10,animation:"fadeIn 0.15s ease",
+                    }}>
+                      <div>
+                        <div style={{fontSize:10,color:"rgba(255,255,255,0.45)",marginBottom:5}}>Name</div>
+                        <input value={editName} onChange={e=>setEditName(e.target.value)} style={{
+                          width:"100%",padding:"8px 10px",borderRadius:8,
+                          background:"rgba(0,0,0,0.25)",border:"1px solid rgba(255,255,255,0.15)",
+                          color:"#fff",fontSize:14,fontFamily:"inherit",
+                        }}/>
+                      </div>
+                      <div>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                          <span style={{fontSize:10,color:"rgba(255,255,255,0.45)"}}>Tempo</span>
+                          <span style={{fontSize:11,fontWeight:700,color:"#0EA5E9"}}>{editBpm} BPM</span>
+                        </div>
+                        <input type="range" min="40" max="220" step="1" value={editBpm}
+                          onChange={e=>setEditBpm(parseInt(e.target.value,10))}
+                          style={{width:"100%",cursor:"pointer"}}/>
+                      </div>
+                      <div style={{display:"flex",gap:8}}>
+                        <button onClick={()=>setEditIdx(null)} style={{
+                          flex:1,padding:"9px",borderRadius:10,
+                          background:"rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",
+                          fontWeight:700,fontSize:12,
+                        }}>Cancel</button>
+                        <button onClick={()=>saveEdit(idx)} disabled={!editName.trim()} style={{
+                          flex:1,padding:"9px",borderRadius:10,
+                          background: editName.trim() ? "#0EA5E9" : "rgba(255,255,255,0.1)",
+                          color: editName.trim() ? "#111" : "rgba(255,255,255,0.35)",
+                          fontWeight:800,fontSize:12,
+                        }}>Save</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
+            </div>
+
+            {/* Online beat library */}
+            <div style={{
+              background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.12)",
+              borderRadius:18,padding:16,marginBottom:16,
+            }}>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.5)",marginBottom:6}}>ONLINE BEAT LIBRARY</div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:14,lineHeight:1.4}}>
+                Free, rights-cleared instrumentals — added straight to your beat list, no download needed.
+              </div>
+
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+                {QUICK_PICK_BEATS.map(item=>{
+                  const added = alreadyAdded(item.name);
+                  const busy = libraryBusy===item.name;
+                  return (
+                    <div key={item.name} style={{
+                      display:"flex",alignItems:"center",gap:10,
+                      background:"rgba(0,0,0,0.15)",borderRadius:12,padding:"10px 12px",
+                    }}>
+                      <div style={{
+                        width:36,height:36,borderRadius:8,flexShrink:0,
+                        background:"linear-gradient(135deg,#0EA5E9,#22C55E)",
+                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,
+                      }}>🌐</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontFamily:"'Nunito'",fontWeight:800,fontSize:13,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</div>
+                        <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>{item.bpm} BPM · {item.credit}</div>
+                      </div>
+                      <button onClick={()=>addLibraryBeat(item)} disabled={added||busy} style={{
+                        flexShrink:0,padding:"8px 14px",borderRadius:10,
+                        background: added ? "rgba(34,197,94,0.2)" : busy ? "rgba(255,255,255,0.1)" : "#0EA5E9",
+                        color: added ? "#22C55E" : busy ? "rgba(255,255,255,0.5)" : "#111",
+                        fontWeight:800,fontSize:12,
+                        display:"flex",alignItems:"center",gap:6,
+                      }}>
+                        {busy && (
+                          <span style={{
+                            width:11,height:11,borderRadius:"50%",
+                            border:"2px solid rgba(0,0,0,0.25)",borderTopColor:"rgba(255,255,255,0.7)",
+                            animation:"spin 0.7s linear infinite",display:"inline-block",
+                          }}/>
+                        )}
+                        {added ? "Added ✓" : busy ? "Loading" : "+ Add"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {libraryError && (
+                <div style={{fontSize:11,color:"#fca5a5",marginBottom:12}}>{libraryError}</div>
+              )}
+
+              <div style={{borderTop:"1px solid rgba(255,255,255,0.1)",paddingTop:14}}>
+                <div style={{fontSize:10,fontWeight:700,letterSpacing:1.2,color:"rgba(255,255,255,0.4)",marginBottom:10}}>OR ADD FROM A DIRECT AUDIO URL</div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <input value={customName} onChange={e=>setCustomName(e.target.value)} placeholder="Beat name"
+                    style={{
+                      width:"100%",padding:"9px 12px",borderRadius:10,
+                      background:"rgba(0,0,0,0.2)",border:"1px solid rgba(255,255,255,0.15)",
+                      color:"#fff",fontSize:13,fontFamily:"inherit",
+                    }}/>
+                  <input value={customUrl} onChange={e=>setCustomUrl(e.target.value)} placeholder="https://... direct link to an mp3/ogg/wav"
+                    style={{
+                      width:"100%",padding:"9px 12px",borderRadius:10,
+                      background:"rgba(0,0,0,0.2)",border:"1px solid rgba(255,255,255,0.15)",
+                      color:"#fff",fontSize:13,fontFamily:"inherit",
+                    }}/>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:11,color:"rgba(255,255,255,0.4)",flexShrink:0}}>Tempo</span>
+                    <input type="range" min="40" max="220" step="1" value={customBpm}
+                      onChange={e=>setCustomBpm(parseInt(e.target.value,10))}
+                      style={{flex:1,cursor:"pointer"}}/>
+                    <span style={{fontSize:12,fontWeight:700,color:"#0EA5E9",width:52,textAlign:"right",flexShrink:0}}>{customBpm} BPM</span>
+                  </div>
+                  <button onClick={addCustomUrlBeat} disabled={!customUrl.trim()||!customName.trim()||customBusy} style={{
+                    width:"100%",padding:"11px",borderRadius:10,
+                    background: (customUrl.trim()&&customName.trim()&&!customBusy) ? "#0EA5E9" : "rgba(255,255,255,0.1)",
+                    color: (customUrl.trim()&&customName.trim()&&!customBusy) ? "#111" : "rgba(255,255,255,0.35)",
+                    fontFamily:"'Nunito'",fontWeight:900,fontSize:14,
+                  }}>{customBusy ? "Loading…" : "+ Add From URL"}</button>
+                  {customError && (
+                    <div style={{fontSize:11,color:"#fca5a5"}}>{customError}</div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div style={{
               background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.12)",
               borderRadius:18,padding:16,
             }}>
-              <div style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.5)",marginBottom:14}}>ADD A NEW BEAT</div>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.5)",marginBottom:14}}>ADD A SYNTHESIZED BEAT</div>
 
               <div style={{marginBottom:12}}>
                 <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginBottom:6}}>Name</div>
@@ -1312,15 +1616,15 @@
           <div style={{width:"100%",maxWidth:"min(94vw, 640px)",margin:"0 auto"}}>
             <BuilderHeader title="Word Sets" onBack={onBack} />
 
-            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:10}}>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
               {WORD_GROUPS.map(g=>(
                 <button key={g} onClick={()=>setGroup(g)} style={{
-                  flexBasis:"calc(25% - 6px)",flexGrow:1,padding:"10px 4px",borderRadius:12,
+                  flexBasis:"calc(20% - 5px)",flexGrow:1,padding:"9px 2px",borderRadius:10,
                   background: group===g ? GROUP_COLORS[g] : "rgba(255,255,255,0.09)",
                   color:      group===g ? "#111" : "rgba(255,255,255,0.6)",
-                  fontFamily:"'Nunito'",fontWeight:900,fontSize:14,
+                  fontFamily:"'Nunito'",fontWeight:900,fontSize:12,
                   border: group===g ? "none" : "1px solid rgba(255,255,255,0.12)",
-                }}>Group {g}</button>
+                }}>{g}</button>
               ))}
             </div>
 
