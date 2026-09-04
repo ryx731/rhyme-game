@@ -28,60 +28,30 @@
       display: flex;
       max-height: 100vh;
     }
-    /* Force the single top-level screen div to fill #root — without this,
-       a flex child with no explicit width/height shrinks to its content
-       size and gets pinned to the top-left, which is the bug that made
-       the game look tiny/misplaced on both desktop and mobile. */
     #root > * {
       width: 100%;
       height: 100%;
       min-width: 0;
       min-height: 0;
     }
-    /* Desktop fullscreen priority */
     @media (min-width: 1024px) {
-      html, body {
-        height: 100%;
-      }
-      #root {
-        height: 100vh;
-      }
+      html, body { height: 100%; }
+      #root { height: 100vh; }
     }
-    /* Mobile optimization */
     @media (max-width: 1023px) {
-      html, body {
-        height: 100%;
-        height: 100dvh;
-      }
-      #root {
-        height: 100dvh;
-      }
+      html, body { height: 100%; height: 100dvh; }
+      #root { height: 100dvh; }
     }
-    ::-webkit-scrollbar {
-      width: 0;
-    }
-    button {
-      cursor: pointer;
-      font-family: inherit;
-      border: none;
-      outline: none;
-    }
-    input[type="range"] {
-      accent-color: #0EA5E9;
-    }
-    input[type="text"],
-    input[type="file"],
-    textarea {
-      -webkit-appearance: none;
-      appearance: none;
-      font-size: 16px; /* Prevents auto-zoom on iOS */
-      font-family: inherit;
-    }
-    textarea {
+    ::-webkit-scrollbar { width: 0; }
+    button { cursor: pointer; font-family: inherit; border: none; outline: none; }
+    input[type="range"] { accent-color: #0EA5E9; }
+    input[type="text"], input[type="file"], textarea {
       -webkit-appearance: none;
       appearance: none;
       font-size: 16px;
+      font-family: inherit;
     }
+    textarea { -webkit-appearance: none; appearance: none; font-size: 16px; }
   </style>
 </head>
 <body>
@@ -103,18 +73,97 @@
       { id:"AAXX", label:"AAXX", desc:"Couplet",    pattern:["A","A",null,null] },
       { id:"AXAX", label:"AXAX", desc:"Skip",       pattern:["A",null,"A",null] },
     ];
-    const GROUP_COLORS = {
-      A:"#F97316", B:"#0EA5E9", C:"#EAB308", D:"#EC4899",
-      E:"#22C55E", F:"#A855F7", G:"#EF4444", H:"#14B8A6",
-      I:"#F59E0B", J:"#3B82F6", K:"#84CC16", L:"#D946EF",
-      M:"#10B981", N:"#F43F5E", O:"#6366F1", P:"#EAB308",
-      Q:"#06B6D4", R:"#F97316", S:"#A3E635", T:"#8B5CF6",
+
+    // ─── Color Themes ─────────────────────────────────────────────────────────────
+    // Each theme defines the app's background gradient plus the palette used
+    // to color rhyme-group tiles. Rhyme colors are picked to stay distinct
+    // and readable against that theme's background/tile surfaces.
+    // Colors used to distinguish rhyme-scheme SLOTS (the "A"/"B" positions in
+    // a pattern like AABB) on the actual game screen, per the request that A
+    // lines always read as orange and B lines always read as blue regardless
+    // of which of the 20 word families happens to be filling them in a given
+    // round. Kept separate from each theme's 20-color `rhyme` palette, which
+    // is still used by the Word Sets editor where every family needs its own
+    // distinct color. Extra slot letters (schemes only use A/B today, but
+    // this covers future ones) fall back to a small rotation of further
+    // distinct hues.
+    const SLOT_COLORS = { A:"#F97316", B:"#0EA5E9", C:"#EAB308", D:"#A855F7", E:"#22C55E", F:"#EC4899" };
+    function slotColor(slot) {
+      return SLOT_COLORS[slot] || "#94A3B8";
+    }
+
+    const COLOR_THEMES = {
+      classic: {
+        label:"Classic Purple",
+        bg:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
+        accent:"#F97316",
+        accent2:"#0EA5E9",
+        rhyme:{
+          A:"#F97316", B:"#0EA5E9", C:"#EAB308", D:"#EC4899",
+          E:"#22C55E", F:"#A855F7", G:"#EF4444", H:"#14B8A6",
+          I:"#F59E0B", J:"#3B82F6", K:"#84CC16", L:"#D946EF",
+          M:"#10B981", N:"#F43F5E", O:"#6366F1", P:"#FACC15",
+          Q:"#06B6D4", R:"#FB923C", S:"#A3E635", T:"#8B5CF6",
+        },
+      },
+      midnight: {
+        label:"Midnight",
+        bg:"linear-gradient(155deg,#1e293b 0%,#0f172a 100%)",
+        accent:"#38BDF8",
+        accent2:"#F472B6",
+        rhyme:{
+          A:"#38BDF8", B:"#F472B6", C:"#FBBF24", D:"#34D399",
+          E:"#A78BFA", F:"#FB7185", G:"#4ADE80", H:"#60A5FA",
+          I:"#FCD34D", J:"#C084FC", K:"#2DD4BF", L:"#F87171",
+          M:"#818CF8", N:"#FDE047", O:"#5EEAD4", P:"#F0ABFC",
+          Q:"#93C5FD", R:"#FDBA74", S:"#86EFAC", T:"#C4B5FD",
+        },
+      },
+      sunset: {
+        label:"Sunset",
+        bg:"linear-gradient(155deg,#F97316 0%,#BE123C 100%)",
+        accent:"#FDE047",
+        accent2:"#FB923C",
+        rhyme:{
+          A:"#FDE047", B:"#FB7185", C:"#38BDF8", D:"#4ADE80",
+          E:"#FCA5A5", F:"#A78BFA", G:"#FDBA74", H:"#5EEAD4",
+          I:"#F0ABFC", J:"#FACC15", K:"#93C5FD", L:"#FB923C",
+          M:"#86EFAC", N:"#F472B6", O:"#67E8F9", P:"#FEF08A",
+          Q:"#C4B5FD", R:"#FCD34D", S:"#7DD3FC", T:"#FDA4AF",
+        },
+      },
+      forest: {
+        label:"Forest",
+        bg:"linear-gradient(155deg,#166534 0%,#052e16 100%)",
+        accent:"#FACC15",
+        accent2:"#4ADE80",
+        rhyme:{
+          A:"#FACC15", B:"#4ADE80", C:"#38BDF8", D:"#FB923C",
+          E:"#A3E635", F:"#F472B6", G:"#2DD4BF", H:"#FCD34D",
+          I:"#86EFAC", J:"#93C5FD", K:"#FDBA74", L:"#67E8F9",
+          M:"#BEF264", N:"#F0ABFC", O:"#5EEAD4", P:"#FDE047",
+          Q:"#60A5FA", R:"#FCA5A5", S:"#34D399", T:"#FEF08A",
+        },
+      },
+      mono: {
+        label:"Grayscale",
+        bg:"linear-gradient(155deg,#3f3f46 0%,#18181b 100%)",
+        accent:"#E4E4E7",
+        accent2:"#A1A1AA",
+        rhyme:{
+          A:"#F4F4F5", B:"#D4D4D8", C:"#A1A1AA", D:"#E4E4E7",
+          E:"#71717A", F:"#FAFAFA", G:"#D4D4D8", H:"#A1A1AA",
+          I:"#E4E4E7", J:"#F4F4F5", K:"#D4D4D8", L:"#A1A1AA",
+          M:"#FAFAFA", N:"#E4E4E7", O:"#D4D4D8", P:"#A1A1AA",
+          Q:"#F4F4F5", R:"#D4D4D8", S:"#E4E4E7", T:"#A1A1AA",
+        },
+      },
     };
+    const THEME_IDS = Object.keys(COLOR_THEMES);
+
     // All 20 rhyme families actually stocked with words in POOLS (A–T) —
     // this drives both the Word Sets editor's group picker and the random
-    // family assignment each freestyle session pulls from. Previously this
-    // list stopped at "H", so families I–T were fully populated but never
-    // reachable anywhere in the app.
+    // family assignment each freestyle session pulls from.
     const WORD_GROUPS = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T"];
     const SYLLABLE_OPTS= ["1 Syllable","2 Syllables","3 Syllables","All 1+2+3"];
     const DURATIONS = [8,16,32,64];
@@ -122,24 +171,11 @@
     const ROW_H = 96;
     const BEAT_STYLES = ["boom-bap","lofi","trap"];
     const BEAT_STYLE_LABELS = { "boom-bap":"Boom Bap", "lofi":"Lo-Fi", "trap":"Trap", "upload":"Uploaded", "url":"Online" };
-    // A handful of verified, license-clear (CC0 / public domain) instrumental
-    // tracks hosted on Wikimedia Commons, which serves media with permissive
-    // cross-origin headers — so these can be fetched and played directly,
-    // no manual download+upload round trip required. Special:FilePath is a
-    // stable redirect that always resolves to the current file location.
     const QUICK_PICK_BEATS = [
       { name:"Friendly Evil Gangsta (Synth Hip Hop)", bpm:82, file:"Friendly_Evil_Gangsta_Synth_Hip_Hop.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
       { name:"Happy Happy HardPopCoreTastic", bpm:118, file:"Happy_Happy_HardPopCoreTastic.ogg", credit:"Mesostic · CC0 · Wikimedia Commons" },
     ];
 
-    // Wikimedia's file pages (commons.wikimedia.org/wiki/Special:FilePath/...)
-    // redirect to the actual CDN file on upload.wikimedia.org, but the
-    // redirect hop itself doesn't carry CORS headers, so browsers block a
-    // plain fetch() before it ever reaches the CDN response that *does* have
-    // them. The MediaWiki API sidesteps this: calling api.php with
-    // `origin=*` returns a CORS-enabled JSON response containing the file's
-    // real, final CDN URL, which can then be fetched directly with no
-    // redirect involved.
     async function resolveCommonsFileUrl(filename) {
       const api = "https://commons.wikimedia.org/w/api.php?action=query&titles="
         + encodeURIComponent("File:" + filename)
@@ -154,9 +190,6 @@
       return url;
     }
 
-    // If a pasted URL is a Wikimedia Commons file/page link rather than a
-    // direct CDN link, resolve it to the real file URL first. Otherwise use
-    // it as-is (other hosts may or may not allow cross-origin fetches).
     async function resolveDirectAudioUrl(url) {
       const specialFilePath = url.match(/commons\.wikimedia\.org\/wiki\/Special:FilePath\/([^?#]+)/);
       const filePage = url.match(/commons\.wikimedia\.org\/wiki\/File:([^?#]+)/);
@@ -254,55 +287,129 @@
       return a; 
     }
 
-    // Picks a random, non-repeating actual word-group letter (A–H) for each
-    // abstract slot ("A"/"B") that a scheme's pattern uses. This is what lets
-    // a session pull from any of the 8 rhyme families instead of always
-    // literally being groups A and B — the single biggest lever on perceived
-    // word variety, since every family has its own ~15-40 word pool.
-    function assignRandomGroups(scheme) {
-      const slots = [...new Set(scheme.pattern.filter(Boolean))];
-      const pool = shuffle(WORD_GROUPS);
-      const map = {};
-      slots.forEach((slot, i) => { map[slot] = pool[i % pool.length]; });
-      return map;
+    // Splits a scheme's repeating pattern (applied across numBars) into
+    // consecutive "runs" — maximal stretches of bars that share the same
+    // slot letter, back to back. For AABB across 8 bars that's:
+    //   [A,A] [B,B] [A,A] [B,B]  ->  4 runs
+    // This is the actual unit a rhyme family gets assigned to: every run
+    // gets its own fresh random family, so bars within a run genuinely
+    // rhyme (same family), and the *next* run of that same letter (e.g. the
+    // second "AA" couplet) gets a different family than the first, which is
+    // what makes a rhyme scheme like AABB actually sound like AABB-CCDD-...
+    // instead of the same two families repeating for the whole session.
+    function splitIntoRuns(scheme, numBars) {
+      const runs = [];
+      let i = 0;
+      while (i < numBars) {
+        const slot = scheme.pattern[i % scheme.pattern.length];
+        let len = 1;
+        while (
+          i + len < numBars &&
+          scheme.pattern[(i + len) % scheme.pattern.length] === slot
+        ) {
+          len++;
+        }
+        runs.push({ slot, start: i, length: len });
+        i += len;
+      }
+      return runs;
     }
 
-    function buildBars(scheme, syl, numBars, sets, groupMap) {
-      // Only build pools for the groups this scheme actually uses (currently
-      // just A/B), but this works for any of the 8 word groups so future
-      // schemes can reference more of them without any code changes here.
-      const neededSlots = [...new Set(scheme.pattern.filter(g => g))];
-      const used = {};
-      const pools = {};
-      neededSlots.forEach(slot => {
-        const actualGroup = (groupMap && groupMap[slot]) || slot;
-        used[slot] = 0;
-        pools[slot] = shuffle(getPool(actualGroup, syl, sets));
+    // Assigns each run a random rhyme family, never repeating the family
+    // used by the immediately preceding run (of any slot) so consecutive
+    // couplets don't accidentally land on the same sound, and cycling back
+    // through a freshly shuffled order of all 20 families once exhausted so
+    // long sessions still get full variety rather than repeating in a fixed
+    // loop.
+    function assignRunFamilies(runs) {
+      const families = [];
+      let shuffled = shuffle(WORD_GROUPS);
+      let cursor = 0;
+      let prevFamily = null;
+      runs.forEach(() => {
+        if (cursor >= shuffled.length) {
+          shuffled = shuffle(WORD_GROUPS);
+          cursor = 0;
+        }
+        let fam = shuffled[cursor++];
+        // Avoid repeating the previous run's family back-to-back (only
+        // relevant right at a reshuffle boundary); just pull the next one.
+        if (fam === prevFamily && cursor < shuffled.length) {
+          fam = shuffled[cursor++];
+        }
+        prevFamily = fam;
+        families.push(fam);
       });
-      return Array.from({length:numBars},(_,i)=>{
-        const slot = scheme.pattern[i%scheme.pattern.length];
-        let word = null;
-        const actualGroup = slot ? ((groupMap && groupMap[slot]) || slot) : null;
-        if (slot) { word = pools[slot][used[slot]%Math.max(1,pools[slot].length)]; used[slot]++; }
-        return { barNum:i+1, word, group:actualGroup };
+      return families;
+    }
+
+    function buildBars(scheme, syl, numBars, sets) {
+      const runs = splitIntoRuns(scheme, numBars);
+      const runFamilies = assignRunFamilies(runs);
+      const bars = new Array(numBars).fill(null);
+
+      // When syllable mode is "All 1+2+3", pick ONE concrete syllable count
+      // (1, 2, or 3) per rhyming run-PAIR rather than letting each run — or
+      // even each word within a run — land on a different syllable count
+      // independently. Real freestyle/rhyme-game apps keep each "round" of
+      // lines metrically consistent (matching syllable count across the A
+      // and B lines that go together), which this mirrors: every two
+      // consecutive rhyming runs (e.g. an AA couplet followed by a BB
+      // couplet) share one syllable count, then the next pair of runs rolls
+      // a fresh one. For a fixed syllable mode ("1 Syllable" etc.) this has
+      // no effect since every line already uses that same count.
+      const FIXED_SYL_COUNTS = ["1 Syllable", "2 Syllables", "3 Syllables"];
+      const pairSylChoice = {};
+      function syllableCountForRun(runIdx) {
+        if (syl !== "All 1+2+3") return syl;
+        const pairIdx = Math.floor(runIdx / 2);
+        if (!(pairIdx in pairSylChoice)) {
+          pairSylChoice[pairIdx] = FIXED_SYL_COUNTS[Math.floor(Math.random() * FIXED_SYL_COUNTS.length)];
+        }
+        return pairSylChoice[pairIdx];
+      }
+
+      runs.forEach((run, idx) => {
+        const slot = run.slot;
+        if (!slot) {
+          // Non-rhyming (null/"X") slots — leave blank.
+          for (let k = 0; k < run.length; k++) {
+            bars[run.start + k] = { barNum: run.start + k + 1, word: null, group: null, slot: null };
+          }
+          return;
+        }
+        const family = runFamilies[idx];
+        const effectiveSyl = syllableCountForRun(idx);
+        // Pull enough distinct words from this one family to fill the run
+        // (so e.g. an AABB couplet's two "A" bars share a family but aren't
+        // literally the same word), falling back to repeating words only if
+        // the family's pool is smaller than the run length. Using
+        // `effectiveSyl` (a single concrete syllable count, resolved above)
+        // instead of the raw `syl` setting means both words in the run —
+        // and, via pairSylChoice, the paired run of the other letter —
+        // always come from the same syllable-count pool.
+        const pool = shuffle(getPool(family, effectiveSyl, sets));
+        for (let k = 0; k < run.length; k++) {
+          const word = pool.length ? pool[k % pool.length] : null;
+          // `group` keeps the actual rhyme family (used by the Word Sets
+          // editor's 20-color palette); `slot` keeps the scheme letter
+          // (A/B/...) which the in-game bars are colored by instead, so
+          // every "A" line reads as one color and every "B" line as another
+          // regardless of which of the 20 families it happens to be pulling
+          // words from that round.
+          bars[run.start + k] = { barNum: run.start + k + 1, word, group: word ? family : null, slot: word ? slot : null };
+        }
       });
+
+      return bars;
     }
 
     // ─── BPM Detection ────────────────────────────────────────────────────────────
-    // Lightweight onset-detection + autocorrelation tempo estimator. Not
-    // studio-grade, but good enough to give a solid starting guess for any
-    // uploaded or fetched track — the BPM slider stays fully editable
-    // afterward in case it guesses wrong (very syncopated beats, silence at
-    // the start, etc).
     function detectBPM(audioBuffer) {
       try {
         const sampleRate = audioBuffer.sampleRate;
         const raw = audioBuffer.getChannelData(0);
-        // Only analyze the first ~45s — plenty for a stable tempo estimate
-        // and keeps this fast even on long tracks.
         const analyzeSamples = Math.min(raw.length, sampleRate * 45);
-
-        // Collapse to a coarse energy envelope (~200 frames/sec).
         const chunkSize = Math.max(1, Math.floor(sampleRate / 200));
         const numChunks = Math.floor(analyzeSamples / chunkSize);
         if (numChunks < 20) return null;
@@ -316,16 +423,11 @@
           }
           envelope[i] = Math.sqrt(sum / chunkSize);
         }
-
-        // Onset/novelty function: positive-only energy rises (percussive hits).
         const novelty = new Float32Array(numChunks);
         for (let i = 1; i < numChunks; i++) {
           const d = envelope[i] - envelope[i - 1];
           novelty[i] = d > 0 ? d : 0;
         }
-
-        // Autocorrelate the novelty curve across lags spanning 60–200 BPM,
-        // picking the lag (i.e. beat period) with the strongest self-similarity.
         const chunkRate = sampleRate / chunkSize;
         const minLag = Math.max(1, Math.round(chunkRate * 60 / 200));
         const maxLag = Math.round(chunkRate * 60 / 60);
@@ -338,9 +440,7 @@
           if (score > bestScore) { bestScore = score; bestLag = lag; }
         }
         if (bestScore <= 0) return null;
-
         let bpm = (60 * chunkRate) / bestLag;
-        // Fold octave errors (half/double time) into a musically typical range.
         while (bpm < 70) bpm *= 2;
         while (bpm > 180) bpm /= 2;
         return Math.round(bpm);
@@ -409,6 +509,7 @@
       const [bars,      setBars]      = useState([]);
       const [ballSpeed, setBallSpeed] = useState(1);
       const [justFinished, setJustFinished] = useState(false);
+      const [themeId,   setThemeId]   = useState("classic");
 
       const [beats, setBeats] = useState(DEFAULT_BEATS);
       const [wordSets, setWordSets] = useState(() => JSON.parse(JSON.stringify(POOLS)));
@@ -419,6 +520,11 @@
       const [currentBar,  setCurrentBar]  = useState(0);
       const [beatInBar,   setBeatInBar]   = useState(0);
       const [beatFrac,    setBeatFrac]    = useState(0);
+      // Number of lead-in "buffer" bars before the freestyle content starts —
+      // gives the user time to get in rhythm with the beat before any words
+      // appear. These count down (3, 2, 1) instead of showing a word.
+      const BUFFER_BARS = 2;
+      const [inBuffer,    setInBuffer]    = useState(false);
 
       const audioCtx  = useRef(null);
       const schedFn   = useRef(null);
@@ -430,21 +536,12 @@
       const rowRefs   = useRef({});
       const scrollRef = useRef(null);
 
-      // Load any previously saved beats/word sets from persistent storage once
-      // on mount. Using window.storage instead of localStorage because
-      // localStorage isn't available/reliable inside the artifact sandbox.
       useEffect(() => {
         (async () => {
           try {
             const savedBeats = await window.storage.get('rhyme_beats', false);
             if (savedBeats && savedBeats.value) {
               const parsed = JSON.parse(savedBeats.value);
-              // Uploaded/online beats' audio can't be persisted as raw bytes
-              // (see the save effect below). Local uploads have no way to
-              // re-fetch their audio, so a stale entry with no audioData is
-              // dropped. Online-library beats DO keep their "url" though, so
-              // those are kept and simply re-fetched lazily next time they're
-              // played (see ensureBeatAudio).
               const cleaned = Array.isArray(parsed)
                 ? parsed.filter(b => b.style !== "upload" || !!b.url)
                 : [];
@@ -457,6 +554,12 @@
               setWordSets(JSON.parse(savedWords.value));
             }
           } catch (e) { /* nothing saved yet */ }
+          try {
+            const savedTheme = await window.storage.get('rhyme_theme', false);
+            if (savedTheme && savedTheme.value && COLOR_THEMES[savedTheme.value]) {
+              setThemeId(savedTheme.value);
+            }
+          } catch (e) { /* nothing saved yet */ }
           storageLoaded.current = true;
           setStorageReady(true);
         })();
@@ -466,11 +569,6 @@
         if (!storageReady) return;
         (async () => {
           try {
-            // An ArrayBuffer can't survive JSON.stringify (it silently turns into "{}"),
-            // so persisting an uploaded beat's raw audio here would just corrupt it and
-            // fail to decode on the next load. Save everything except that binary data.
-            // Beats fetched from the online library keep their "url" field, so they can
-            // be silently re-fetched next time instead of being lost like local uploads.
             const toSave = beats.map(b => {
               if (b.style === "upload") {
                 const { audioData, ...rest } = b;
@@ -497,9 +595,21 @@
       }, [wordSets, storageReady]);
 
       useEffect(() => {
+        if (!storageReady) return;
+        (async () => {
+          try {
+            await window.storage.set('rhyme_theme', themeId, false);
+          } catch (e) {
+            console.error("Could not save theme:", e);
+          }
+        })();
+      }, [themeId, storageReady]);
+
+      useEffect(() => {
         if (beatIdx > beats.length - 1) setBeatIdx(0);
       }, [beats, beatIdx]);
 
+      const theme   = COLOR_THEMES[themeId] || COLOR_THEMES.classic;
       const scheme  = SCHEMES[schemeIdx];
       const beat    = beats[beatIdx] || beats[0] || DEFAULT_BEATS[0];
       const bpm     = beat.bpm;
@@ -513,23 +623,19 @@
 
       useEffect(() => {
         if (screen !== "game") return;
-        const el = rowRefs.current[currentBar];
+        const key = inBuffer ? "buf" : currentBar;
+        const el = rowRefs.current[key];
         const cont = scrollRef.current;
         if (!el || !cont) return;
         const target = el.offsetTop - cont.clientHeight * 0.30;
         cont.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
-      }, [currentBar, screen]);
+      }, [currentBar, inBuffer, screen]);
 
       const startSession = () => {
-        // Fresh shuffle of words every time a freestyle session begins, and a
-        // fresh random assignment of which of the 8 rhyme families the
-        // scheme's "A"/"B" slots pull from — so replaying with the same
-        // settings gives you both new words AND a different rhyme sound
-        // instead of always landing on the same two families.
-        const groupMap = assignRandomGroups(scheme);
-        setBars(buildBars(scheme, syl, numBars, wordSets, groupMap));
+        setBars(buildBars(scheme, syl, numBars, wordSets));
         setCurrentBar(0); setBeatInBar(0); setBeatFrac(0);
         bCount.current = 0; setIsPlaying(false); setJustFinished(false);
+        setInBuffer(false);
         setScreen("game");
       };
 
@@ -541,13 +647,6 @@
         }
         setJustFinished(false);
 
-        // If we already have a live context (user hit Pause, not Back), just
-        // resume it instead of tearing it down and building a new one. Mobile
-        // browsers cap how many AudioContexts can exist at once, and closing +
-        // recreating one on every Play/Pause press is exactly the kind of thing
-        // that quietly exhausts that cap and leaves you with silent audio.
-        // Bonus: ctx.currentTime freezes while suspended, so resuming also
-        // continues the beat/bar timing from exactly where it left off.
         if (audioCtx.current) {
           const ctx = audioCtx.current;
           ctx.resume().then(() => {
@@ -572,9 +671,6 @@
           audioCtx.current = ctx;
 
           const playDecodedBuffer = (arrayBuffer) => {
-            // Always decode a copy (slice(0)) — decodeAudioData detaches the
-            // buffer it's given, so decoding the original stored/cached
-            // buffer directly would break every playback after the first.
             ctx.decodeAudioData(arrayBuffer.slice(0), (buffer) => {
               const src = ctx.createBufferSource();
               src.buffer = buffer;
@@ -592,13 +688,8 @@
           };
 
           if (beat.style === "upload" && beat.audioData) {
-            // Local upload or an already-fetched online-library track.
             playDecodedBuffer(beat.audioData);
           } else if (beat.style === "upload" && beat.url) {
-            // Online-library beat whose audio hasn't been fetched yet this
-            // session (e.g. right after a page reload, since raw audio bytes
-            // aren't persisted). Fetch it now, then play it, and cache the
-            // bytes on the beat object so this only happens once.
             fetch(beat.url)
               .then(res => {
                 if (!res.ok) throw new Error("HTTP " + res.status);
@@ -615,7 +706,6 @@
                 ctx.close();
               });
           } else {
-            // Play synthesized beat
             schedFn.current = makeEngine(ctx, beat.style);
             nextT.current = ctx.currentTime + 0.05;
             startT.current = ctx.currentTime + 0.05;
@@ -632,12 +722,7 @@
             setIsPlaying(true);
           }
         };
-        
-        // Some mobile browsers report the context as already "running" even
-        // though audio is still locked until a real sound plays, so resume()
-        // unconditionally (it's a harmless no-op if already running) and play
-        // a single silent sample first — the standard mobile "unlock" trick —
-        // before doing anything else.
+
         const unlock = () => {
           const silentBuf = ctx.createBuffer(1, 1, 22050);
           const silentSrc = ctx.createBufferSource();
@@ -658,8 +743,6 @@
       const pausePlay = useCallback(() => {
         clearTimeout(timerRef.current);
         cancelAnimationFrame(animRef.current);
-        // Suspend, don't close — keeps the same AudioContext alive so Play can
-        // resume it instantly instead of creating a brand new one.
         if (audioCtx.current) {
           audioCtx.current.suspend();
         }
@@ -677,16 +760,16 @@
         setIsPlaying(false);
       }, []);
 
-      // Called once the last bar has fully played through. Stops all audio
-      // (closing the AudioContext kills the loop/scheduler for good, instead
-      // of letting the beat keep looping forever) and shuffles a brand new
-      // set of words (and rhyme families) in for the next freestyle.
       const finishSession = useCallback(() => {
         closeAudio();
         setJustFinished(true);
-        setBars(buildBars(scheme, syl, numBars, wordSets, assignRandomGroups(scheme)));
+        setInBuffer(false);
+        setBars(buildBars(scheme, syl, numBars, wordSets));
       }, [closeAudio, scheme, syl, numBars, wordSets]);
 
+      // Timing/animation loop. Runs through BUFFER_BARS "count-in" bars first
+      // (no words shown, just a countdown against the beat), then hands off
+      // to the normal bar-by-bar freestyle progression.
       useEffect(() => {
         if (!isPlaying) return;
         let lastBar = -1;
@@ -696,7 +779,29 @@
           if (!ctx) return;
           const elapsed = Math.max(0, ctx.currentTime - startT.current);
           const total   = elapsed / spb;
-          const barIdx  = Math.floor(total / 4);
+          const totalBarIdx = Math.floor(total / 4);
+
+          if (totalBarIdx < BUFFER_BARS) {
+            setInBuffer(true);
+            setBeatInBar(Math.floor(total) % 4);
+            setBeatFrac(total % 1);
+            if (totalBarIdx !== lastBar) {
+              lastBar = totalBarIdx;
+              setCurrentBar(-(BUFFER_BARS - totalBarIdx));
+            }
+            animRef.current = requestAnimationFrame(tick);
+            return;
+          }
+
+          // Unconditionally clear the buffer flag once we're past the count-in —
+          // checking the closed-over `inBuffer` value here was the bug: since
+          // this effect doesn't depend on `inBuffer`, that variable is always
+          // whatever it was when the effect was created (false), so the old
+          // `if (inBuffer)` guard could never actually be true and
+          // setInBuffer(false) was never called, leaving "Get Ready" stuck on
+          // screen forever after the count-in ended.
+          setInBuffer(false);
+          const barIdx = totalBarIdx - BUFFER_BARS;
 
           if (barIdx >= bars.length) {
             if (!finished) {
@@ -706,7 +811,7 @@
               setBeatFrac(0);
               finishSession();
             }
-            return; // stop scheduling further ticks — session is over
+            return;
           }
 
           setBeatInBar(Math.floor(total) % 4);
@@ -733,7 +838,7 @@
           `}</style>
 
           {screen === "landing" && (
-            <LandingScreen onBegin={() => setScreen("home")} />
+            <LandingScreen onBegin={() => setScreen("home")} theme={theme} />
           )}
 
           {screen === "home" && (
@@ -746,6 +851,7 @@
               bars={bars}           scheme={scheme}
               beats={beats} setBeats={setBeats}
               wordSets={wordSets} setWordSets={setWordSets}
+              themeId={themeId} setThemeId={setThemeId} theme={theme}
               onStart={startSession}
             />
           )}
@@ -754,6 +860,8 @@
             <GameScreen
               bars={bars}
               currentBar={currentBar}
+              inBuffer={inBuffer}
+              bufferBars={BUFFER_BARS}
               beatInBar={beatInBar}
               beatFrac={beatFrac}
               isPlaying={isPlaying}
@@ -766,6 +874,7 @@
               ballSpeed={ballSpeed}
               scrollRef={scrollRef}
               rowRefs={rowRefs}
+              theme={theme}
             />
           )}
         </>
@@ -775,18 +884,18 @@
     // ═══════════════════════════════════════════════════════════════════════════════
     // LANDING
     // ═══════════════════════════════════════════════════════════════════════════════
-    function LandingScreen({ onBegin }) {
+    function LandingScreen({ onBegin, theme }) {
       const [leaving, setLeaving] = useState(false);
 
       function handleBegin() {
         setLeaving(true);
-        setTimeout(onBegin, 520); // matches the transition duration below
+        setTimeout(onBegin, 520);
       }
 
       return (
         <div style={{
           height:"100%",width:"100%",position:"relative",
-          background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
+          background:theme.bg,
           display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
           fontFamily:"'Inter',sans-serif",
           transform: leaving ? "translateY(-100%)" : "translateY(0)",
@@ -809,9 +918,9 @@
           </div>
           <button onClick={handleBegin} style={{
             padding:"17px 52px",
-            background:"#F97316",color:"#fff",
+            background:theme.accent,color:"#fff",
             borderRadius:16,fontFamily:"'Nunito'",fontWeight:900,fontSize:20,
-            boxShadow:"0 6px 28px rgba(249,115,22,0.5)",border:"none",
+            boxShadow:`0 6px 28px ${theme.accent}80`,border:"none",
             transition:"transform 0.1s",
           }}
           onMouseDown={e=>e.currentTarget.style.transform="scale(0.96)"}
@@ -831,7 +940,7 @@
     // ═══════════════════════════════════════════════════════════════════════════════
     function HomeScreen({ schemeIdx,setSchemeIdx,sylIdx,setSylIdx,
       beatIdx,setBeatIdx,durIdx,setDurIdx,ballSpeed,setBallSpeed,bars,scheme,
-      beats,setBeats,wordSets,setWordSets,onStart }) {
+      beats,setBeats,wordSets,setWordSets,themeId,setThemeId,theme,onStart }) {
       const [showMore, setShowMore] = useState(false);
       const [settingMode, setSettingMode] = useState(null);
       const syl = SYLLABLE_OPTS[sylIdx];
@@ -845,17 +954,21 @@
             activeIdx={beatIdx}
             setActiveIdx={setBeatIdx}
             onBack={() => setSettingMode(null)}
+            theme={theme}
           />
         );
       }
       if (settingMode === "words") {
-        return <WordBuilder wordSets={wordSets} setWordSets={setWordSets} onBack={() => setSettingMode(null)} />;
+        return <WordBuilder wordSets={wordSets} setWordSets={setWordSets} onBack={() => setSettingMode(null)} theme={theme} />;
+      }
+      if (settingMode === "theme") {
+        return <ThemeBuilder themeId={themeId} setThemeId={setThemeId} onBack={() => setSettingMode(null)} />;
       }
 
       return (
         <div style={{
           height:"100%",width:"100%",overflowY:"auto",
-          background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
+          background:theme.bg,
           padding:"24px 16px 120px",
           display:"flex",flexDirection:"column",alignItems:"center",
           fontFamily:"'Inter',sans-serif",
@@ -879,13 +992,20 @@
               <div style={{
                 marginTop:10,fontSize:11,color:"rgba(255,255,255,0.4)",lineHeight:1.4,
               }}>
-                Each freestyle now pulls from a random pair of the 20 built-in rhyme families, so the sounds change every session — not just the words.
+                Each rhyming pair gets its own random word family, and the next pair switches to a different one — so A lines (orange) and B lines (blue) each stay consistent within a couplet, but the sounds keep changing as the freestyle goes on.
               </div>
-              <button onClick={() => setSettingMode("words")} style={{
-                marginTop:12,width:"100%",background:"rgba(0,0,0,0.15)",color:"#EAB308",
-                borderRadius:12,padding:"10px",fontWeight:700,fontSize:13,
-                border:"1px solid rgba(234,179,8,0.3)",
-              }}>✎ Edit Word Sets</button>
+              <div style={{display:"flex",gap:8,marginTop:12}}>
+                <button onClick={() => setSettingMode("words")} style={{
+                  flex:1,background:"rgba(0,0,0,0.15)",color:"#EAB308",
+                  borderRadius:12,padding:"10px",fontWeight:700,fontSize:13,
+                  border:"1px solid rgba(234,179,8,0.3)",
+                }}>✎ Edit Word Sets</button>
+                <button onClick={() => setSettingMode("theme")} style={{
+                  flex:1,background:"rgba(0,0,0,0.15)",color:theme.accent2,
+                  borderRadius:12,padding:"10px",fontWeight:700,fontSize:13,
+                  border:`1px solid ${theme.accent2}55`,
+                }}>🎨 Color Theme</button>
+              </div>
             </SectionCard>
 
             {/* ── 2. SCHEME ── */}
@@ -893,7 +1013,7 @@
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <CircleBtn onClick={()=>setSchemeIdx(i=>(i-1+SCHEMES.length)%SCHEMES.length)}>‹</CircleBtn>
                 <div style={{flex:1}}>
-                  <MiniGrid scheme={scheme} bars={bars.slice(0,4)} />
+                  <MiniGrid scheme={scheme} bars={bars.slice(0,4)} theme={theme} />
                 </div>
                 <CircleBtn onClick={()=>setSchemeIdx(i=>(i+1)%SCHEMES.length)}>›</CircleBtn>
               </div>
@@ -928,7 +1048,7 @@
               <div style={{background:"rgba(0,0,0,0.15)",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                   <span style={{fontSize:14,fontWeight:600,color:"#fff"}}>Ball Pace</span>
-                  <span style={{fontSize:13,fontWeight:700,color:"#0EA5E9"}}>{ballSpeed.toFixed(2)}x Speed</span>
+                  <span style={{fontSize:13,fontWeight:700,color:theme.accent2}}>{ballSpeed.toFixed(2)}x Speed</span>
                 </div>
                 <input type="range" min="0.5" max="2" step="0.05" value={ballSpeed}
                   onChange={e => setBallSpeed(parseFloat(e.target.value))}
@@ -956,8 +1076,8 @@
                         <button key={l} onClick={()=>setDurIdx(i)} style={{
                           flex:1,padding:"8px 4px",borderRadius:10,
                           background: durIdx===i ? "transparent" : "rgba(255,255,255,0.07)",
-                          color:      durIdx===i ? "#F97316" : "rgba(255,255,255,0.6)",
-                          border:     durIdx===i ? "1.5px solid #F97316" : "1.5px solid transparent",
+                          color:      durIdx===i ? theme.accent : "rgba(255,255,255,0.6)",
+                          border:     durIdx===i ? `1.5px solid ${theme.accent}` : "1.5px solid transparent",
                           fontSize:11,fontWeight:700,transition:"all 0.15s",
                         }}>{l}</button>
                       ))}
@@ -966,9 +1086,9 @@
                   {/* Settings buttons */}
                   <div style={{display:"flex",gap:8}}>
                     <button onClick={() => setSettingMode("beats")} style={{
-                      flex:1,background:"rgba(0,0,0,0.15)",color:"#0EA5E9",
+                      flex:1,background:"rgba(0,0,0,0.15)",color:theme.accent2,
                       borderRadius:12,padding:"10px",fontWeight:700,fontSize:13,
-                      border:"1px solid rgba(14,165,233,0.3)",
+                      border:`1px solid ${theme.accent2}55`,
                     }}>+ Beats</button>
                     <button onClick={() => setSettingMode("words")} style={{
                       flex:1,background:"rgba(0,0,0,0.15)",color:"#EAB308",
@@ -983,9 +1103,9 @@
             {/* Start */}
             <button onClick={onStart} style={{
               width:"100%",padding:"18px",
-              background:"#F97316",color:"#fff",
+              background:theme.accent,color:"#fff",
               borderRadius:16,fontFamily:"'Nunito'",fontWeight:900,fontSize:22,
-              boxShadow:"0 6px 28px rgba(249,115,22,0.5)",border:"none",
+              boxShadow:`0 6px 28px ${theme.accent}80`,border:"none",
               transition:"transform 0.1s",
             }}
             onMouseDown={e=>e.currentTarget.style.transform="scale(0.97)"}
@@ -1043,12 +1163,15 @@
       );
     }
 
-    function MiniGrid({ scheme, bars }) {
+    function MiniGrid({ scheme, bars, theme }) {
       return (
         <div style={{display:"flex",flexDirection:"column",gap:5}}>
           {scheme.pattern.map((grp,i)=>{
             const bar = bars[i];
-            const col = grp ? GROUP_COLORS[bar?.group || grp] : null;
+            // Preview uses the same slot-based coloring (A=orange, B=blue)
+            // as the actual game screen, so this accurately shows what the
+            // freestyle will look like.
+            const col = grp ? slotColor(bar?.slot || grp) : null;
             return (
               <div key={i} style={{display:"flex",gap:5}}>
                 {[0,1,2].map(c=>(
@@ -1071,9 +1194,62 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════
+    // THEME BUILDER
+    // ═══════════════════════════════════════════════════════════════════════════════
+    function ThemeBuilder({ themeId, setThemeId, onBack }) {
+      return (
+        <div style={{
+          height:"100%",width:"100%",overflowY:"auto",
+          background:(COLOR_THEMES[themeId]||COLOR_THEMES.classic).bg,
+          padding:"24px 16px 60px",
+          fontFamily:"'Inter',sans-serif",
+          animation:"fadeIn 0.35s ease both",
+        }}>
+          <div style={{width:"100%",maxWidth:"min(94vw, 640px)",margin:"0 auto"}}>
+            <BuilderHeader title="Color Theme" onBack={onBack} />
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.45)",marginBottom:18,lineHeight:1.5}}>
+              Pick a background and rhyme-family palette. Tap a theme to preview it live.
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {THEME_IDS.map(id=>{
+                const t = COLOR_THEMES[id];
+                const active = id===themeId;
+                const sampleGroups = ["A","B","C","D","E","F"];
+                return (
+                  <button key={id} onClick={()=>setThemeId(id)} style={{
+                    textAlign:"left",borderRadius:16,padding:14,
+                    background: active ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.08)",
+                    border: active ? "2px solid rgba(255,255,255,0.85)" : "1px solid rgba(255,255,255,0.12)",
+                    display:"flex",flexDirection:"column",gap:10,
+                  }}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <span style={{fontFamily:"'Nunito'",fontWeight:900,fontSize:15,color:"#fff"}}>{t.label}</span>
+                      {active && <span style={{fontSize:11,fontWeight:800,color:"#fff"}}>✓ ACTIVE</span>}
+                    </div>
+                    <div style={{
+                      height:34,borderRadius:8,background:t.bg,
+                      display:"flex",alignItems:"center",gap:6,padding:"0 8px",
+                    }}>
+                      {sampleGroups.map(g=>(
+                        <div key={g} style={{
+                          width:20,height:20,borderRadius:5,background:t.rhyme[g],
+                          flexShrink:0,
+                        }}/>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
     // BEAT BUILDER
     // ═══════════════════════════════════════════════════════════════════════════════
-    function BeatBuilder({ beats, setBeats, activeIdx, setActiveIdx, onBack }) {
+    function BeatBuilder({ beats, setBeats, activeIdx, setActiveIdx, onBack, theme }) {
       const [name, setName]   = useState("");
       const [bpm,  setBpm]    = useState(95);
       const [style,setStyle]  = useState("boom-bap");
@@ -1085,9 +1261,6 @@
       const [editName, setEditName] = useState("");
       const [editBpm, setEditBpm] = useState(90);
 
-      // Online library state: tracks which QUICK_PICK_BEATS entry (by name)
-      // is currently being fetched, any per-item error, and a free-form URL
-      // for pulling in beats beyond the curated list.
       const [libraryBusy, setLibraryBusy] = useState(null);
       const [libraryError, setLibraryError] = useState(null);
       const [customUrl, setCustomUrl] = useState("");
@@ -1203,10 +1376,6 @@
         reader.readAsArrayBuffer(uploadFile);
       }
 
-      // ─── Online library ─────────────────────────────────────────────────
-      // Fetches a curated (or custom-URL) track's audio bytes and adds it to
-      // the beat list, exactly like a local upload — the rest of the app
-      // (playback, persistence, editing) treats it identically from here on.
       async function addLibraryBeat(item) {
         setLibraryError(null);
         setLibraryBusy(item.name);
@@ -1267,10 +1436,6 @@
           const ctx = new (window.AudioContext||window.webkitAudioContext)();
           if (ctx.state === 'suspended') ctx.resume();
           uploadAudioRef.current = ctx;
-          // decodeAudioData detaches/neuters the ArrayBuffer it's given, so decoding
-          // the stored buffer directly would leave it unusable next time (this is
-          // exactly what caused "Cannot decode detached ArrayBuffer" after preview).
-          // Always hand it a fresh copy via slice(0).
           ctx.decodeAudioData(arrayBuffer.slice(0), (buffer) => {
             const src = ctx.createBufferSource();
             src.buffer = buffer;
@@ -1286,8 +1451,6 @@
         if (beat.audioData) {
           play(beat.audioData);
         } else if (beat.url) {
-          // Beat survived a reload via its URL but audio bytes weren't kept —
-          // fetch fresh, cache them on the beat, then preview.
           setLibraryBusy(beat.name);
           fetch(beat.url).then(res => res.arrayBuffer()).then(arrayBuffer => {
             setBeats(prev => prev.map(b => b === beat ? { ...b, audioData: arrayBuffer } : b));
@@ -1304,7 +1467,7 @@
       return (
         <div style={{
           height:"100%",width:"100%",overflowY:"auto",
-          background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
+          background:theme.bg,
           padding:"24px 16px 60px",
           fontFamily:"'Inter',sans-serif",
           animation:"fadeIn 0.35s ease both",
@@ -1319,14 +1482,14 @@
               {beats.map((b,idx)=>(
                 <div key={idx} style={{
                   display:"flex",flexDirection:"column",gap:10,
-                  background: idx===activeIdx ? "rgba(249,115,22,0.16)" : "rgba(255,255,255,0.09)",
-                  border: idx===activeIdx ? "1px solid rgba(249,115,22,0.5)" : "1px solid rgba(255,255,255,0.12)",
+                  background: idx===activeIdx ? `${theme.accent}29` : "rgba(255,255,255,0.09)",
+                  border: idx===activeIdx ? `1px solid ${theme.accent}80` : "1px solid rgba(255,255,255,0.12)",
                   borderRadius:14,padding:"10px 12px",
                 }}>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
                     <button onClick={()=>togglePreview(idx,b)} style={{
                       width:38,height:38,borderRadius:"50%",flexShrink:0,
-                      background: previewIdx===idx ? "#F97316" : "rgba(255,255,255,0.14)",
+                      background: previewIdx===idx ? theme.accent : "rgba(255,255,255,0.14)",
                       color:"#fff",fontSize:15,
                       display:"flex",alignItems:"center",justifyContent:"center",
                     }}>
@@ -1343,12 +1506,12 @@
                     </button>
 
                     {idx===activeIdx && (
-                      <span style={{fontSize:10,fontWeight:800,color:"#F97316",marginRight:2,flexShrink:0}}>SELECTED</span>
+                      <span style={{fontSize:10,fontWeight:800,color:theme.accent,marginRight:2,flexShrink:0}}>SELECTED</span>
                     )}
 
                     <button onClick={()=>openEdit(idx,b)} style={{
                       width:30,height:30,borderRadius:"50%",flexShrink:0,
-                      background:"rgba(255,255,255,0.08)",color:"#0EA5E9",fontSize:13,
+                      background:"rgba(255,255,255,0.08)",color:theme.accent2,fontSize:13,
                       display:"flex",alignItems:"center",justifyContent:"center",
                     }}>✎</button>
 
@@ -1382,7 +1545,7 @@
                       <div>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
                           <span style={{fontSize:10,color:"rgba(255,255,255,0.45)"}}>Tempo</span>
-                          <span style={{fontSize:11,fontWeight:700,color:"#0EA5E9"}}>{editBpm} BPM</span>
+                          <span style={{fontSize:11,fontWeight:700,color:theme.accent2}}>{editBpm} BPM</span>
                         </div>
                         <input type="range" min="40" max="220" step="1" value={editBpm}
                           onChange={e=>setEditBpm(parseInt(e.target.value,10))}
@@ -1396,7 +1559,7 @@
                         }}>Cancel</button>
                         <button onClick={()=>saveEdit(idx)} disabled={!editName.trim()} style={{
                           flex:1,padding:"9px",borderRadius:10,
-                          background: editName.trim() ? "#0EA5E9" : "rgba(255,255,255,0.1)",
+                          background: editName.trim() ? theme.accent2 : "rgba(255,255,255,0.1)",
                           color: editName.trim() ? "#111" : "rgba(255,255,255,0.35)",
                           fontWeight:800,fontSize:12,
                         }}>Save</button>
@@ -1437,7 +1600,7 @@
                       </div>
                       <button onClick={()=>addLibraryBeat(item)} disabled={added||busy} style={{
                         flexShrink:0,padding:"8px 14px",borderRadius:10,
-                        background: added ? "rgba(34,197,94,0.2)" : busy ? "rgba(255,255,255,0.1)" : "#0EA5E9",
+                        background: added ? "rgba(34,197,94,0.2)" : busy ? "rgba(255,255,255,0.1)" : theme.accent2,
                         color: added ? "#22C55E" : busy ? "rgba(255,255,255,0.5)" : "#111",
                         fontWeight:800,fontSize:12,
                         display:"flex",alignItems:"center",gap:6,
@@ -1480,11 +1643,11 @@
                     <input type="range" min="40" max="220" step="1" value={customBpm}
                       onChange={e=>setCustomBpm(parseInt(e.target.value,10))}
                       style={{flex:1,cursor:"pointer"}}/>
-                    <span style={{fontSize:12,fontWeight:700,color:"#0EA5E9",width:52,textAlign:"right",flexShrink:0}}>{customBpm} BPM</span>
+                    <span style={{fontSize:12,fontWeight:700,color:theme.accent2,width:52,textAlign:"right",flexShrink:0}}>{customBpm} BPM</span>
                   </div>
                   <button onClick={addCustomUrlBeat} disabled={!customUrl.trim()||!customName.trim()||customBusy} style={{
                     width:"100%",padding:"11px",borderRadius:10,
-                    background: (customUrl.trim()&&customName.trim()&&!customBusy) ? "#0EA5E9" : "rgba(255,255,255,0.1)",
+                    background: (customUrl.trim()&&customName.trim()&&!customBusy) ? theme.accent2 : "rgba(255,255,255,0.1)",
                     color: (customUrl.trim()&&customName.trim()&&!customBusy) ? "#111" : "rgba(255,255,255,0.35)",
                     fontFamily:"'Nunito'",fontWeight:900,fontSize:14,
                   }}>{customBusy ? "Loading…" : "+ Add From URL"}</button>
@@ -1514,7 +1677,7 @@
               <div style={{marginBottom:12}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                   <span style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>Tempo</span>
-                  <span style={{fontSize:12,fontWeight:700,color:"#0EA5E9"}}>{bpm} BPM</span>
+                  <span style={{fontSize:12,fontWeight:700,color:theme.accent2}}>{bpm} BPM</span>
                 </div>
                 <input type="range" min="40" max="220" step="1" value={bpm}
                   onChange={e=>setBpm(parseInt(e.target.value,10))}
@@ -1537,7 +1700,7 @@
 
               <button onClick={addBeat} disabled={!name.trim()} style={{
                 width:"100%",padding:"13px",borderRadius:12,
-                background: name.trim() ? "#F97316" : "rgba(255,255,255,0.1)",
+                background: name.trim() ? theme.accent : "rgba(255,255,255,0.1)",
                 color: name.trim() ? "#fff" : "rgba(255,255,255,0.35)",
                 fontFamily:"'Nunito'",fontWeight:900,fontSize:15,
               }}>+ Add Beat</button>
@@ -1552,12 +1715,12 @@
 
               <a href="https://pixabay.com/music/search/genre/hip-hop-rap/" target="_blank" rel="noopener noreferrer" style={{
                 display:"flex",alignItems:"center",gap:10,textDecoration:"none",
-                background:"rgba(14,165,233,0.14)",border:"1px solid rgba(14,165,233,0.35)",
+                background:`${theme.accent2}24`,border:`1px solid ${theme.accent2}59`,
                 borderRadius:12,padding:"11px 14px",marginBottom:16,
               }}>
                 <span style={{fontSize:18}}>🔗</span>
                 <div>
-                  <div style={{fontSize:13,fontWeight:800,color:"#0EA5E9"}}>Browse free beats on Pixabay ↗</div>
+                  <div style={{fontSize:13,fontWeight:800,color:theme.accent2}}>Browse free beats on Pixabay ↗</div>
                   <div style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>No sign-up — download an MP3, then upload it below</div>
                 </div>
               </a>
@@ -1587,7 +1750,7 @@
               <div style={{marginBottom:16}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                   <span style={{fontSize:11,color:"rgba(255,255,255,0.45)"}}>Tempo (Optional)</span>
-                  <span style={{fontSize:12,fontWeight:700,color:"#0EA5E9"}}>{uploadBpm} BPM</span>
+                  <span style={{fontSize:12,fontWeight:700,color:theme.accent2}}>{uploadBpm} BPM</span>
                 </div>
                 <input type="range" min="40" max="220" step="1" value={uploadBpm}
                   onChange={e=>setUploadBpm(parseInt(e.target.value,10))}
@@ -1597,7 +1760,7 @@
 
               <button onClick={uploadBeat} disabled={!uploadFile || !uploadName.trim()} style={{
                 width:"100%",padding:"13px",borderRadius:12,
-                background: (uploadFile && uploadName.trim()) ? "#0EA5E9" : "rgba(255,255,255,0.1)",
+                background: (uploadFile && uploadName.trim()) ? theme.accent2 : "rgba(255,255,255,0.1)",
                 color: (uploadFile && uploadName.trim()) ? "#111" : "rgba(255,255,255,0.35)",
                 fontFamily:"'Nunito'",fontWeight:900,fontSize:15,
               }}>+ Upload Beat</button>
@@ -1610,7 +1773,7 @@
     // ═══════════════════════════════════════════════════════════════════════════════
     // WORD BUILDER
     // ═══════════════════════════════════════════════════════════════════════════════
-    function WordBuilder({ wordSets, setWordSets, onBack }) {
+    function WordBuilder({ wordSets, setWordSets, onBack, theme }) {
       const [group, setGroup] = useState("A");
       const [sylKey, setSylKey] = useState("1");
       const [bulk, setBulk] = useState("");
@@ -1643,7 +1806,7 @@
       return (
         <div style={{
           height:"100%",width:"100%",overflowY:"auto",
-          background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
+          background:theme.bg,
           padding:"24px 16px 60px",
           fontFamily:"'Inter',sans-serif",
           animation:"fadeIn 0.35s ease both",
@@ -1655,7 +1818,7 @@
               {WORD_GROUPS.map(g=>(
                 <button key={g} onClick={()=>setGroup(g)} style={{
                   flexBasis:"calc(20% - 5px)",flexGrow:1,padding:"9px 2px",borderRadius:10,
-                  background: group===g ? GROUP_COLORS[g] : "rgba(255,255,255,0.09)",
+                  background: group===g ? theme.rhyme[g] : "rgba(255,255,255,0.09)",
                   color:      group===g ? "#111" : "rgba(255,255,255,0.6)",
                   fontFamily:"'Nunito'",fontWeight:900,fontSize:12,
                   border: group===g ? "none" : "1px solid rgba(255,255,255,0.12)",
@@ -1691,8 +1854,8 @@
                 {words.map(w=>(
                   <span key={w} style={{
                     display:"flex",alignItems:"center",gap:6,
-                    background: GROUP_COLORS[group]+"33",
-                    border:`1px solid ${GROUP_COLORS[group]}66`,
+                    background: theme.rhyme[group]+"33",
+                    border:`1px solid ${theme.rhyme[group]}66`,
                     color:"#fff",borderRadius:20,padding:"5px 6px 5px 12px",
                     fontSize:13,fontWeight:600,
                   }}>
@@ -1730,7 +1893,7 @@
               />
               <button onClick={addWords} disabled={!bulk.trim()} style={{
                 width:"100%",padding:"13px",borderRadius:12,
-                background: bulk.trim() ? GROUP_COLORS[group] : "rgba(255,255,255,0.1)",
+                background: bulk.trim() ? theme.rhyme[group] : "rgba(255,255,255,0.1)",
                 color: bulk.trim() ? "#111" : "rgba(255,255,255,0.35)",
                 fontFamily:"'Nunito'",fontWeight:900,fontSize:15,
               }}>+ Add Words</button>
@@ -1743,20 +1906,29 @@
     // ═══════════════════════════════════════════════════════════════════════════════
     // GAME
     // ═══════════════════════════════════════════════════════════════════════════════
-    function GameScreen({ bars,currentBar,beatInBar,beatFrac,isPlaying,justFinished,
-      onPlay,onPause,onBack,beatName,bpm,scrollRef,rowRefs }) {
+    function GameScreen({ bars,currentBar,inBuffer,bufferBars,beatInBar,beatFrac,isPlaying,justFinished,
+      onPlay,onPause,onBack,beatName,bpm,scrollRef,rowRefs,theme }) {
       return (
         <div style={{
           height:"100%",width:"100%",
-          background:"linear-gradient(155deg,#5e52e8 0%,#3d31c4 100%)",
+          background:theme.bg,
           display:"flex",flexDirection:"column",overflow:"hidden",
           fontFamily:"'Inter',sans-serif",
         }}>
           <div ref={scrollRef} style={{flex:1,overflowY:"scroll",overflowX:"hidden",paddingTop:16}}>
             <div style={{width:"100%",maxWidth:"min(94vw, 900px)",margin:"0 auto"}}>
+              <BufferRow
+                refCb={el=>{ if(el) rowRefs.current["buf"]=el; }}
+                isCurrent={inBuffer}
+                isPlaying={isPlaying}
+                beatInBar={beatInBar}
+                beatFrac={beatFrac}
+                countdownNum={-currentBar}
+                bufferBars={bufferBars}
+              />
               {bars.map((bar,idx)=>{
-                const isCur  = idx===currentBar;
-                const isPast = idx<currentBar;
+                const isCur  = !inBuffer && idx===currentBar;
+                const isPast = inBuffer ? false : idx<currentBar;
                 const dist   = currentBar-idx;
                 const opacity= isPast ? Math.max(0.15, 1-dist*0.13) : 1;
                 return (
@@ -1770,6 +1942,7 @@
                     isPlaying={isPlaying}
                     beatInBar={beatInBar}
                     beatFrac={beatFrac}
+                    theme={theme}
                   />
                 );
               })}
@@ -1780,27 +1953,104 @@
           <BottomPanel
             isPlaying={isPlaying} justFinished={justFinished} onPlay={onPlay} onPause={onPause} onBack={onBack}
             beatName={beatName} bpm={bpm}
-            currentBar={currentBar} totalBars={bars.length}
+            currentBar={inBuffer ? -1 : currentBar} totalBars={bars.length}
+            inBuffer={inBuffer} countdownNum={-currentBar}
+            theme={theme}
           />
         </div>
       );
     }
 
-    // The row holds 4 equal-width blocks in a flex row with small gaps between
-    // them — the tick marks and the ball both need to land on each block's
-    // actual center (12.5%, 37.5%, 62.5%, 87.5%), not on evenly-spaced points
-    // across the row's full 0–100% span, which is what caused the previous
-    // mismatch between the ticks/ball and the blocks they're meant to mark.
     const TICK_POSITIONS = [12.5, 37.5, 62.5, 87.5];
 
-    function BarRow({ refCb, bar, isCurrent, isPast, opacity, isPlaying, beatInBar, beatFrac }) {
-      const color = bar.group ? GROUP_COLORS[bar.group] : null;
+    // A lead-in "count-in" bar shown before the freestyle content begins.
+    // Visually similar to a normal bar row but shows a big countdown number
+    // (bufferBars, bufferBars-1, ..., 1) instead of a rhyme word, giving the
+    // user time to settle into the beat's tempo first.
+    function BufferRow({ refCb, isCurrent, isPlaying, beatInBar, beatFrac, countdownNum, bufferBars }) {
       const bounceY     = Math.sin(beatFrac * Math.PI);
       const BALL_R      = 17;
       const rowPixH     = isCurrent ? ROW_H + 10 : ROW_H;
       const ballBottom  = 10 + bounceY * (rowPixH * 0.55);
-      // Ball glides from the current beat's tick toward the next one, landing
-      // exactly on each tick right as that beat starts (beatFrac === 0).
+      const fromPct     = TICK_POSITIONS[beatInBar];
+      const toPct       = beatInBar < 3 ? TICK_POSITIONS[beatInBar + 1] : 97;
+      const ballLeftPct = fromPct + (toPct - fromPct) * beatFrac;
+
+      if (!isCurrent) return null;
+
+      return (
+        <div ref={refCb} style={{
+          display:"flex",alignItems:"center",padding:"0 8px",marginBottom:5,
+        }}>
+          <div style={{width:30,flexShrink:0}} />
+          <div style={{
+            flex:1,height:rowPixH,position:"relative",
+            borderRadius:12,
+            outline:"3px solid rgba(255,255,255,0.9)",outlineOffset:2,
+            boxShadow:"0 0 0 6px rgba(255,255,255,0.13), 0 10px 36px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.1)",
+            background:"rgba(255,255,255,0.14)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+          }}>
+            <div style={{textAlign:"center"}}>
+              <div style={{
+                fontFamily:"'Nunito'",fontWeight:900,fontSize:34,color:"#fff",lineHeight:1,
+              }}>{Math.max(1, Math.min(bufferBars, countdownNum))}</div>
+              <div style={{
+                fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.55)",marginTop:4,
+              }}>GET READY</div>
+            </div>
+
+            <div style={{
+              position:"absolute",bottom:8,left:"3%",right:"3%",height:2,
+              background:"rgba(255,255,255,0.25)",borderRadius:1,pointerEvents:"none",
+            }}/>
+            {[0,1,2,3].map(i=>{
+              const xPct = TICK_POSITIONS[i];
+              const isActive = i===beatInBar;
+              return (
+                <div key={i} style={{
+                  position:"absolute",bottom:4,left:`${xPct}%`,transform:"translateX(-50%)",
+                  width:3,height:16,
+                  background: isActive&&isPlaying ? "#fff" : "rgba(255,255,255,0.3)",
+                  borderRadius:2,
+                  boxShadow: isActive&&isPlaying ? "0 0 8px #fff" : "none",
+                  pointerEvents:"none",
+                }}/>
+              );
+            })}
+            {isPlaying && (
+              <>
+                <div style={{
+                  position:"absolute",bottom:7,left:`${ballLeftPct}%`,transform:"translateX(-50%)",
+                  width:BALL_R*1.5,height:6,borderRadius:"50%",
+                  background:"rgba(0,0,0,0.35)",filter:"blur(3px)",pointerEvents:"none",
+                }}/>
+                <div style={{
+                  position:"absolute",bottom:ballBottom,left:`${ballLeftPct}%`,transform:"translateX(-50%)",
+                  width:BALL_R*2,height:BALL_R*2,borderRadius:"50%",
+                  background:"radial-gradient(circle at 33% 28%, #FFE97A, #F5AC26 52%, #C87E0A)",
+                  boxShadow:"0 4px 18px rgba(0,0,0,0.5), 0 0 0 2px rgba(255,255,255,0.2), 0 0 20px rgba(245,172,38,0.7)",
+                  pointerEvents:"none",zIndex:20,
+                }}/>
+              </>
+            )}
+          </div>
+          <div style={{width:30,flexShrink:0}} />
+        </div>
+      );
+    }
+
+    function BarRow({ refCb, bar, isCurrent, isPast, opacity, isPlaying, beatInBar, beatFrac, theme }) {
+      // Colored by scheme SLOT (A=orange, B=blue, ...), not by the actual
+      // rhyme family — this is what makes every "A" line in the freestyle
+      // read as one consistent color and every "B" line as another, so the
+      // AABB/ABAB/etc structure itself is visually obvious regardless of
+      // which of the 20 word families is filling a given line.
+      const color = bar.slot ? slotColor(bar.slot) : null;
+      const bounceY     = Math.sin(beatFrac * Math.PI);
+      const BALL_R      = 17;
+      const rowPixH     = isCurrent ? ROW_H + 10 : ROW_H;
+      const ballBottom  = 10 + bounceY * (rowPixH * 0.55);
       const fromPct     = TICK_POSITIONS[beatInBar];
       const toPct       = beatInBar < 3 ? TICK_POSITIONS[beatInBar + 1] : 97;
       const ballLeftPct = fromPct + (toPct - fromPct) * beatFrac;
@@ -1932,7 +2182,7 @@
       );
     }
 
-    function BottomPanel({ isPlaying,justFinished,onPlay,onPause,onBack,beatName,bpm,currentBar,totalBars }) {
+    function BottomPanel({ isPlaying,justFinished,onPlay,onPause,onBack,beatName,bpm,currentBar,totalBars,inBuffer,countdownNum,theme }) {
       return (
         <div style={{
           background:"rgba(12,8,50,0.95)",
@@ -1947,7 +2197,7 @@
             marginBottom:3,textTransform:"uppercase",
           }}>
             {isPlaying
-              ? `Bar ${currentBar+1} of ${totalBars}`
+              ? (inBuffer ? "Get Ready…" : `Bar ${currentBar+1} of ${totalBars}`)
               : justFinished
                 ? "🎉 FREESTYLE COMPLETE — WORDS SHUFFLED"
                 : "GAME PAUSED"}
@@ -1971,11 +2221,11 @@
             }}>‹ BACK</button>
 
             <button onClick={isPlaying?onPause:onPlay} style={{
-              background: isPlaying?"rgba(255,255,255,0.12)":"#F97316",
+              background: isPlaying?"rgba(255,255,255,0.12)":theme.accent,
               color:"#fff",borderRadius:22,padding:"9px 26px",
               fontFamily:"'Nunito'",fontWeight:900,fontSize:15,
               border: isPlaying?"1px solid rgba(255,255,255,0.18)":"none",
-              boxShadow: isPlaying?"none":"0 3px 18px rgba(249,115,22,0.55)",
+              boxShadow: isPlaying?"none":`0 3px 18px ${theme.accent}8c`,
               transition:"all 0.15s",
             }}>
               {isPlaying?"⏸ Pause":justFinished?"▶ Play Again":"▶ Play Beat"}
@@ -2007,7 +2257,7 @@
               <div style={{height:3,background:"rgba(255,255,255,0.1)",borderRadius:2,overflow:"hidden"}}>
                 <div style={{
                   height:"100%",
-                  width:`${Math.round((currentBar/Math.max(1,totalBars-1))*100)}%`,
+                  width: inBuffer ? "0%" : `${Math.round((currentBar/Math.max(1,totalBars-1))*100)}%`,
                   background:"#EAB308",borderRadius:2,transition:"width 0.5s",
                 }}/>
               </div>
